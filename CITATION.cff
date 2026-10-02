@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the HERO paper below."
+title: "HERO: Learning Humanoid End-Effector Control for Visual Whole-Body Open-Vocabulary Object Grasping"
+type: software
+authors:
+  - family-names: Dong
+    given-names: Runpei
+  - family-names: Li
+    given-names: Ziyan
+  - family-names: Gupta
+    given-names: Arjun
+  - family-names: He
+    given-names: Xialin
+  - family-names: Gupta
+    given-names: Saurabh
+url: "https://hero-humanoid.github.io/"
+preferred-citation:
+  type: conference-paper
+  title: "HERO: Learning Humanoid End-Effector Control for Visual Whole-Body Open-Vocabulary Object Grasping"
+  authors:
+    - family-names: Dong
+      given-names: Runpei
+    - family-names: Li
+      given-names: Ziyan
+    - family-names: Gupta
+      given-names: Arjun
+    - family-names: He
+      given-names: Xialin
+    - family-names: Gupta
+      given-names: Saurabh
+  conference:
+    name: "10th Annual Conference on Robot Learning"
+  year: 2026
+  url: "https://openreview.net/forum?id=gbchkYm28k"

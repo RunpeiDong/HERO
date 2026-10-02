@@ -1,0 +1,16 @@
+YCB Object and Model Set — object 003_cracker_box (Cheez-It carton), Google 16k textured scan
+
+The Tabletop Lab demo embeds a recentred copy of the textured mesh and a 1024 px downsample of the texture atlas
+from the YCB benchmark data set (http://ycb-benchmarks.s3-website-us-east-1.amazonaws.com/, archive
+003_cracker_box_google_16k.tgz, sha256 0f084b0212274700d416384b9bc290521257d2b15ab66f68768a6a22806226b6),
+prepared by isaacsim/scripts/fetch_ycb_cracker_box.py. The carton's physical stand-in is a bounding box; the mesh is
+visual only.
+
+Please cite:
+  B. Calli, A. Singh, A. Walsman, S. Srinivasa, P. Abbeel, A. M. Dollar, "The YCB Object and Model Set: Towards
+  Common Benchmarks for Manipulation Research", International Conference on Advanced Robotics (ICAR), 2015.
+  B. Calli, A. Walsman, A. Singh, S. Srinivasa, P. Abbeel, A. M. Dollar, "Benchmarking in Manipulation Research:
+  Using the Yale-CMU-Berkeley Object and Model Set", IEEE Robotics & Automation Magazine, 2015.
+
+The YCB project distributes these models for research use; product names and package artwork visible in the scan
+belong to their respective owners. Confirm the data set's current terms before redistributing the public build.

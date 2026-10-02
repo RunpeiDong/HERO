@@ -1,0 +1,357 @@
+{
+  "schema": "hero_g1_asset_sources/v1",
+  "upstream": "https://github.com/unitreerobotics/unitree_ros",
+  "upstream_revision": "5994d4faef0a9cadd3287f8de0199a67eeb2a259",
+  "license": "LICENSE.unitree",
+  "license_sha256": "84aac59fd3246e3ddc49d1387644e8fcf43b0def4f0b9fe687f372e90446df2d",
+  "files": [
+    {
+      "file": "g1_29dof_dex3fixed_hero.urdf",
+      "sha256": "1355424d2c61b550999c7432f537c6a3c6919a1de1c8dc6bb00fb816935281b3",
+      "upstream_path": null,
+      "identical_to_upstream": false
+    },
+    {
+      "file": "g1_29dof_old_freebase_fixed_dex3.xml",
+      "sha256": "e517164f079934399a18724059dead171400eb18197ae2ee606ef7222a06a53e",
+      "upstream_path": null,
+      "identical_to_upstream": false
+    },
+    {
+      "file": "g1_29dof_with_hand_rev_1_0.urdf",
+      "sha256": "180752e69e2bb418defb6eb2f42027f99f3d617fe110e64a8cc86996e9803d87",
+      "upstream_path": "robots/g1_description/g1_29dof_with_hand_rev_1_0.urdf",
+      "identical_to_upstream": false
+    },
+    {
+      "file": "g1_29dof_with_hand_rev_1_0.xml",
+      "sha256": "546e6f31360963a17ebb2d7d0b4784e36274dd38576c9c05d841538fd8e99617",
+      "upstream_path": "robots/g1_description/g1_29dof_with_hand_rev_1_0.xml",
+      "identical_to_upstream": false
+    },
+    {
+      "file": "meshes/head_link.STL",
+      "sha256": "005fb67fbd3eff94aa8bf4a6e83238174e9f91b6721f7111594322f223724411",
+      "upstream_path": "robots/g1_description/meshes/head_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_ankle_pitch_link.STL",
+      "sha256": "d49e3abc6f5b12e532062cd575b87b5ef40cd2a3fc18f54a1ca5bba4f773d51d",
+      "upstream_path": "robots/g1_description/meshes/left_ankle_pitch_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_ankle_roll_link.STL",
+      "sha256": "c4092af943141d4d9f74232f3cfa345afc6565f46a077793b8ae0e68b39dc33f",
+      "upstream_path": "robots/g1_description/meshes/left_ankle_roll_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_elbow_link.STL",
+      "sha256": "fa752198accd104d5c4c3a01382e45165b944fbbc5acce085059223324e5bed3",
+      "upstream_path": "robots/g1_description/meshes/left_elbow_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hand_index_0_link.STL",
+      "sha256": "6b35f2f77211d5a366f0b9a4e47c4ee35e536731266f1a34e9efa12db579b892",
+      "upstream_path": "robots/g1_description/meshes/left_hand_index_0_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hand_index_1_link.STL",
+      "sha256": "9e315ebc8a7a0cb98e033985b586b20d81cf8aa761181ae61ce56fcb14077a06",
+      "upstream_path": "robots/g1_description/meshes/left_hand_index_1_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hand_middle_0_link.STL",
+      "sha256": "6b35f2f77211d5a366f0b9a4e47c4ee35e536731266f1a34e9efa12db579b892",
+      "upstream_path": "robots/g1_description/meshes/left_hand_index_0_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hand_middle_1_link.STL",
+      "sha256": "9e315ebc8a7a0cb98e033985b586b20d81cf8aa761181ae61ce56fcb14077a06",
+      "upstream_path": "robots/g1_description/meshes/left_hand_index_1_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hand_palm_link.STL",
+      "sha256": "23a486b75bd78a9bf03cec25d84d87f97f3dae038cf21a743b6d469b337e4004",
+      "upstream_path": "robots/g1_description/meshes/left_hand_palm_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hand_thumb_0_link.STL",
+      "sha256": "a90c721661c0622685488a3c74d1e122c7da89242d3a1daef75edb83422d05e0",
+      "upstream_path": "robots/g1_description/meshes/left_hand_thumb_0_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hand_thumb_1_link.STL",
+      "sha256": "445c54a45bc13ce36001556f66bc0f49c83cb40321205ae4d676bb2874325684",
+      "upstream_path": "robots/g1_description/meshes/left_hand_thumb_1_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hand_thumb_2_link.STL",
+      "sha256": "3d8dbe5085acfc213d21aa8b0782e89cd79084e9678f3a85fc7b04a86b029db5",
+      "upstream_path": "robots/g1_description/meshes/left_hand_thumb_2_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hip_pitch_link.STL",
+      "sha256": "4725168105ee768ee31638ef22b53f6be2d7641bfd7cfefe803488d884776fa4",
+      "upstream_path": "robots/g1_description/meshes/left_hip_pitch_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hip_roll_link.STL",
+      "sha256": "91f25922ee8a7c3152790051bebad17b4d9cd243569c38fe340285ff93a97acf",
+      "upstream_path": "robots/g1_description/meshes/left_hip_roll_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_hip_yaw_link.STL",
+      "sha256": "a16d88aa6ddac8083aa7ad55ed317bea44b1fa003d314fba88965b7ed0f3b55b",
+      "upstream_path": "robots/g1_description/meshes/left_hip_yaw_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_knee_link.STL",
+      "sha256": "8d92b9e3d3a636761150bb8025e32514c4602b91c7028d523ee42b3e632de477",
+      "upstream_path": "robots/g1_description/meshes/left_knee_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_shoulder_pitch_link.STL",
+      "sha256": "f0d1cfd02fcf0d42f95e678eeca33da3afbcc366ffba5c052847773ec4f31d52",
+      "upstream_path": "robots/g1_description/meshes/left_shoulder_pitch_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_shoulder_roll_link.STL",
+      "sha256": "fb9df21687773522598dc384f1a2945c7519f11cbc8bd372a49170316d6eee88",
+      "upstream_path": "robots/g1_description/meshes/left_shoulder_roll_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_shoulder_yaw_link.STL",
+      "sha256": "1aa97e9748e924336567992181f78c7cd0652fd52a4afcca3df6b2ef6f9e712e",
+      "upstream_path": "robots/g1_description/meshes/left_shoulder_yaw_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_wrist_pitch_link.STL",
+      "sha256": "b251d8e05047f695d0f536cd78c11973cfa4e78d08cfe82759336cc3471de3a9",
+      "upstream_path": "robots/g1_description/meshes/left_wrist_pitch_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_wrist_roll_link.STL",
+      "sha256": "edc387c9a0ba8c2237e9b296d32531426fabeb6f53e58df45c76106bca74148c",
+      "upstream_path": "robots/g1_description/meshes/left_wrist_roll_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/left_wrist_yaw_link.STL",
+      "sha256": "83f8fb3a726bf9613d65dd14f0f447cb918c3c95b3938042a0c9c09749267d3b",
+      "upstream_path": "robots/g1_description/meshes/left_wrist_yaw_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/logo_link.STL",
+      "sha256": "8571a0a19bc4916fa55f91449f51d5fdefd751000054865a842449429d5f155b",
+      "upstream_path": "robots/g1_description/meshes/logo_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/pelvis.STL",
+      "sha256": "5ba6bbc888e630550140d3c26763f10206da8c8bd30ed886b8ede41c61f57a31",
+      "upstream_path": "robots/g1_description/meshes/pelvis.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/pelvis_contour_link.STL",
+      "sha256": "5cc5c2c7a312329e3feeb2b03d3fc09fc29705bd01864f6767e51be959662420",
+      "upstream_path": "robots/g1_description/meshes/pelvis_contour_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_ankle_pitch_link.STL",
+      "sha256": "15be426539ec1be70246d4d82a168806db64a41301af8b35c197a33348c787a9",
+      "upstream_path": "robots/g1_description/meshes/right_ankle_pitch_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_ankle_roll_link.STL",
+      "sha256": "4b66222ea56653e627711b56d0a8949b4920da5df091da0ceb343f54e884e3a5",
+      "upstream_path": "robots/g1_description/meshes/right_ankle_roll_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_elbow_link.STL",
+      "sha256": "1be925d7aa268bb8fddf5362b9173066890c7d32092c05638608126e59d1e2ab",
+      "upstream_path": "robots/g1_description/meshes/right_elbow_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hand_index_0_link.STL",
+      "sha256": "12ab4300c95e437e834f9aef772b3b431c671bf34338930b52ad11aef73bbd0d",
+      "upstream_path": "robots/g1_description/meshes/right_hand_index_0_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hand_index_1_link.STL",
+      "sha256": "c9c34efce4563cacdcfd29fc838a982976d40f5442c71219811dcbbf3923a33d",
+      "upstream_path": "robots/g1_description/meshes/right_hand_index_1_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hand_middle_0_link.STL",
+      "sha256": "12ab4300c95e437e834f9aef772b3b431c671bf34338930b52ad11aef73bbd0d",
+      "upstream_path": "robots/g1_description/meshes/right_hand_index_0_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hand_middle_1_link.STL",
+      "sha256": "c9c34efce4563cacdcfd29fc838a982976d40f5442c71219811dcbbf3923a33d",
+      "upstream_path": "robots/g1_description/meshes/right_hand_index_1_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hand_palm_link.STL",
+      "sha256": "86c0b231cc44477d64a6493e5a427ba16617a00738112dd187c652675b086fb9",
+      "upstream_path": "robots/g1_description/meshes/right_hand_palm_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hand_thumb_0_link.STL",
+      "sha256": "544298d0ea1088f5b276a10cc6a6a9e533efdd91594955fdc956c46211d07f83",
+      "upstream_path": "robots/g1_description/meshes/right_hand_thumb_0_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hand_thumb_1_link.STL",
+      "sha256": "0a9a820da8dd10f298778b714f1364216e8a5976f4fd3a05689ea26327d44bf6",
+      "upstream_path": "robots/g1_description/meshes/right_hand_thumb_1_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hand_thumb_2_link.STL",
+      "sha256": "3f1bfb37668e8f61801c8d25f171fa1949e08666be86c67acad7e0079937cc45",
+      "upstream_path": "robots/g1_description/meshes/right_hand_thumb_2_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hip_pitch_link.STL",
+      "sha256": "e4f3c99d7f4a7d34eadbef9461fc66e3486cb5442db1ec50c86317d459f1a9c6",
+      "upstream_path": "robots/g1_description/meshes/right_hip_pitch_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hip_roll_link.STL",
+      "sha256": "4c254ef66a356f492947f360dd931965477b631e3fcc841f91ccc46d945d54f6",
+      "upstream_path": "robots/g1_description/meshes/right_hip_roll_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_hip_yaw_link.STL",
+      "sha256": "e479c2936ca2057e9eb2f7dff6c189b7419d7b8484dea0b298cbb36a2a6aa668",
+      "upstream_path": "robots/g1_description/meshes/right_hip_yaw_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_knee_link.STL",
+      "sha256": "63c4008449c9bbe701a6e2b557b7a252e90cf3a5abcf54cee46862b9a69f8ec8",
+      "upstream_path": "robots/g1_description/meshes/right_knee_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_shoulder_pitch_link.STL",
+      "sha256": "24cdb387e0128dfe602770a81c56cdce3a0181d34d039a11d1aaf8819b7b8c02",
+      "upstream_path": "robots/g1_description/meshes/right_shoulder_pitch_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_shoulder_roll_link.STL",
+      "sha256": "962b97c48f9ce9e8399f45dd9522e0865d19aa9fd299406b2d475a8fc4a53e81",
+      "upstream_path": "robots/g1_description/meshes/right_shoulder_roll_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_shoulder_yaw_link.STL",
+      "sha256": "a0b76489271da0c72461a344c9ffb0f0c6e64f019ea5014c1624886c442a2fe5",
+      "upstream_path": "robots/g1_description/meshes/right_shoulder_yaw_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_wrist_pitch_link.STL",
+      "sha256": "d22f8f3b3127f15a63e5be1ee273cd5075786c3142f1c3d9f76cbf43d2a26477",
+      "upstream_path": "robots/g1_description/meshes/right_wrist_pitch_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_wrist_roll_link.STL",
+      "sha256": "a7ee9212ff5b94d6cb7f52bb1bbf3f352194d5b598acff74f4c77d340c5b344f",
+      "upstream_path": "robots/g1_description/meshes/right_wrist_roll_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/right_wrist_yaw_link.STL",
+      "sha256": "bc9dece2d12509707e0057ba2e48df8f3d56db0c79410212963a25e8a50f61a6",
+      "upstream_path": "robots/g1_description/meshes/right_wrist_yaw_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/torso_link.STL",
+      "sha256": "e96d023f0368a4e3450b86ca5d4f10227d8141156a373e7da8cb3c93266523e0",
+      "upstream_path": "robots/g1_description/meshes/torso_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/torso_link_rev_1_0.STL",
+      "sha256": "11ddb46f2098efbbd8816b1d65893632d8e78be936376c7cdcd6771899ccc723",
+      "upstream_path": "robots/g1_description/meshes/torso_link_rev_1_0.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/waist_roll_link.STL",
+      "sha256": "34f0aa73f41131230be4d25876c944fdf6c24d62553f199ff8b980c15e8913df",
+      "upstream_path": "robots/g1_description/meshes/waist_roll_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/waist_roll_link_rev_1_0.STL",
+      "sha256": "b67c347a05abc3e8ddae600d98a082bee273bb39f8e651647708b0a7140a8a97",
+      "upstream_path": "robots/g1_description/meshes/waist_roll_link_rev_1_0.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/waist_support_link.STL",
+      "sha256": "1fae9e1bb609848a1667d32eed8d6083ae443538a306843056a2a660f1b2926a",
+      "upstream_path": "robots/g1_description/meshes/waist_support_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/waist_yaw_link.STL",
+      "sha256": "2883f20e03f09b669b5b4ce10677ee6b5191c0934b584d7cbaef2d0662856ffb",
+      "upstream_path": "robots/g1_description/meshes/waist_yaw_link.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "meshes/waist_yaw_link_rev_1_0.STL",
+      "sha256": "ec6db442b11f25eed898b5add07940c85d804f300de24dcbd264ccd8be7d554c",
+      "upstream_path": "robots/g1_description/meshes/waist_yaw_link_rev_1_0.STL",
+      "identical_to_upstream": true
+    },
+    {
+      "file": "scene_g1_29dof_freebase_fixed_dex3.xml",
+      "sha256": "a18d3588b113a39df6aaeb0ef1eca08a6f38e5163ccaef9bd6beef58e954c9a6",
+      "upstream_path": null,
+      "identical_to_upstream": false
+    }
+  ]
+}

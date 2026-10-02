@@ -1,0 +1,93 @@
+{
+  "teaser.jpg": {
+    "source": "https://runpeidong.web.illinois.edu/runpei_files/hero.pdf",
+    "figure": 1,
+    "page": 1,
+    "source_sha256": "4a6213d5694f11e6385d479d8c372c277b1b010d8131cc06940976299e42369f",
+    "crop_points": [
+      107.8,
+      196.0,
+      504.2,
+      455.7
+    ],
+    "description": "HERO teaser (Figure 1)."
+  },
+  "tabletop-demo.gif": {
+    "source": "Screen recording of the bundled HERO browser demo.",
+    "policy": {
+      "file": "checkpoints/example/model.onnx",
+      "variant": "hero_anchor",
+      "sha256": "521402c04092df1f441a5a5e4f09a1ed17480ffa27e7220f5e1ee664ccbb2c33"
+    },
+    "description": "Accelerated 15-second infinite loop showing target selection, pick-and-place into the tray, and return home.",
+    "output": {
+      "sha256": "17cfbcfcaee62298c69fdcea2f730b355acb84cf7190bc1e3e06551a0746e7f4",
+      "bytes": 4780448,
+      "width": 960,
+      "height": 534,
+      "duration_seconds": 15.0,
+      "loop": "infinite",
+      "frames": 225
+    }
+  },
+  "uiuc-logo.svg": {
+    "source": "https://hero-humanoid.github.io/static/images/uiuc_logo.svg",
+    "brand_reference": "https://brand.illinois.edu/visual-identity/wordmarks",
+    "source_sha256": "fc9f0d96949c7f7d7c3e896e21e9c0e9fcc56713014de6f56b06014dfa209a2b",
+    "description": "Existing Illinois horizontal wordmark. Original paths and colors retained with a transparent background; no border or added padding.",
+    "sha256": "e14c235a86a709795eee0c0f6f4dacc5e88eb4d9192da7da4871bd71982ba1c8"
+  },
+  "link-project.svg": {
+    "source": "Original vector artwork for this repository.",
+    "description": "Project link badge with a compact icon.",
+    "sha256": "edbc9f7ac179eb4e46d23883143496b1e84c2a044236a2fd8117168fbd524b1e"
+  },
+  "link-paper.svg": {
+    "source": "Original vector artwork for this repository.",
+    "description": "Paper link badge with a compact icon.",
+    "sha256": "fdf088fcc9eb7e7a14e15f71f0ed0ce25ce18085728f739fcf1508ae84f5c3a0"
+  },
+  "link-arxiv.svg": {
+    "source": "Original vector artwork for this repository.",
+    "description": "arXiv link badge with a compact icon.",
+    "sha256": "3650bf39c848936351fc2b6d26cfa2387ba7c5b51a30722eb6e4872e84177873"
+  },
+  "link-demo.svg": {
+    "source": "Original vector artwork for this repository.",
+    "description": "Demo link badge with a compact icon.",
+    "sha256": "621e973af7faea967ec833634e44b5a1040cef5d04f33643e0a798020c1d4230"
+  },
+  "link-citation.svg": {
+    "source": "Original vector artwork for this repository.",
+    "description": "Citation link badge with a compact icon.",
+    "sha256": "a217fdda6f67d1745b3841076840bd5dbc74263bc2de862f1464def5c51e243c"
+  },
+  "uiuc-logo-dark.svg": {
+    "source": "https://hero-humanoid.github.io/static/images/uiuc_logo.svg",
+    "brand_reference": "https://brand.illinois.edu/visual-identity/wordmarks",
+    "source_sha256": "fc9f0d96949c7f7d7c3e896e21e9c0e9fcc56713014de6f56b06014dfa209a2b",
+    "description": "Dark-theme version of the Illinois wordmark: original paths retained, navy changed to white, orange retained, transparent background without a border.",
+    "sha256": "c11e81294d5167af2864b9c0baa97ca4dad6822dbdf77b67c540edd50772213f"
+  },
+  "link-huggingface.svg": {
+    "source": "Original vector artwork for this repository.",
+    "description": "Hugging Face collection link badge for models and benchmark data.",
+    "sha256": "ea899e0610c4ecc35334f9b11d129c8e6d8cd316bd1c0156e2637f6d1bf9fd7b"
+  },
+  "hero_poster.gif": {
+    "source": "hero_poster.mp4 (HERO poster video, real-robot highlight reel; 1280x720, 45.8 s)",
+    "source_sha256": "5cb7950a14cc76c453e98b4acee0f105eb8e8bd4ed3ac4b6365ba28865b35161",
+    "processing": "ffmpeg: setpts=PTS/1.5 (1.5x speed), fps=10, scale=800:-2 lanczos, palettegen max_colors=96 stats_mode=diff, paletteuse dither=bayer:bayer_scale=5 diff_mode=rectangle, infinite loop",
+    "description": "README header animation: the poster video at 1.5x speed.",
+    "output": {
+      "sha256": "a1c850a6e792a4a2b7408105b6e2dcdd10a9468017f7587087d7ad26d7b946d9",
+      "bytes": 9971124,
+      "width": 800,
+      "height": 450,
+      "fps": 10,
+      "duration_seconds": 30.6,
+      "loop": "infinite",
+      "frames": 306
+    }
+  }
+}

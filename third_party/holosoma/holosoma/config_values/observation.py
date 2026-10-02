@@ -1,0 +1,61 @@
+"""Default observation manager configurations."""
+
+from holosoma.config_values.loco.g1.observation import g1_29dof_loco_single_wolinvel
+from holosoma.config_values.loco.t1.observation import t1_29dof_loco_single_wolinvel
+from holosoma.config_values.wbt.g1.observation import (
+    g1_29dof_wbt_observation,
+    g1_29dof_wbt_observation_ee_residual_actor,
+    g1_29dof_wbt_observation_obj_pose_actor,
+    g1_29dof_wbt_observation_obj_pose_ee_future1,
+    g1_29dof_wbt_observation_obj_pose_ee_future4,
+    g1_29dof_wbt_observation_obj_pose_ee_future8,
+    g1_29dof_wbt_observation_obj_pose_ee_future16,
+    g1_29dof_wbt_observation_obj_pose_ee_hist1,
+    g1_29dof_wbt_observation_obj_pose_ee_hist4,
+    g1_29dof_wbt_observation_obj_pose_ee_hist8,
+    g1_29dof_wbt_observation_obj_pose_ee_hist16,
+    g1_29dof_wbt_observation_blind_hist4,
+    g1_29dof_wbt_observation_obj_pose_ee_residual_actor,
+    g1_29dof_wbt_observation_obj_pose_ee_contactforce,
+    g1_29dof_wbt_observation_obj_pose_ee_priv_proprio,
+    g1_29dof_wbt_observation_obj_pose_ee_priv_proprio_physics,
+    g1_29dof_wbt_observation_obj_pose_ee_priv_proprio_projgrav,
+    g1_29dof_wbt_observation_obj_pose_ee_projgrav,
+    g1_29dof_wbt_observation_priv_proprio,
+    g1_29dof_wbt_observation_chunk8_s0,
+    g1_29dof_wbt_observation_obj_pose_ee_chunk8_s0,
+    g1_29dof_wbt_observation_priv_proprio_projgrav,
+    g1_29dof_wbt_observation_projgrav,
+    g1_29dof_wbt_observation_head_residual_actor,
+    g1_29dof_wbt_observation_obj_pose_ee_head_actor,
+    g1_29dof_wbt_observation_ee_only_actor,
+    g1_29dof_wbt_observation_w_object,
+)
+
+none = None
+
+DEFAULTS = {
+    "none": none,
+    "t1_29dof_loco_single_wolinvel": t1_29dof_loco_single_wolinvel,
+    "g1_29dof_loco_single_wolinvel": g1_29dof_loco_single_wolinvel,
+    "g1_29dof_wbt": g1_29dof_wbt_observation,
+    "g1_29dof_wbt_w_object": g1_29dof_wbt_observation_w_object,
+    "g1_29dof_wbt_obj_pose_actor": g1_29dof_wbt_observation_obj_pose_actor,
+    "g1_29dof_wbt_ee_residual_actor": g1_29dof_wbt_observation_ee_residual_actor,
+    "g1_29dof_wbt_obj_pose_ee_residual_actor": g1_29dof_wbt_observation_obj_pose_ee_residual_actor,
+    "g1_29dof_wbt_obj_pose_ee_contactforce": g1_29dof_wbt_observation_obj_pose_ee_contactforce,
+    "g1_29dof_wbt_obj_pose_ee_future1": g1_29dof_wbt_observation_obj_pose_ee_future1,
+    "g1_29dof_wbt_obj_pose_ee_future4": g1_29dof_wbt_observation_obj_pose_ee_future4,
+    "g1_29dof_wbt_obj_pose_ee_future8": g1_29dof_wbt_observation_obj_pose_ee_future8,
+    "g1_29dof_wbt_obj_pose_ee_future16": g1_29dof_wbt_observation_obj_pose_ee_future16,
+    "g1_29dof_wbt_obj_pose_ee_hist1": g1_29dof_wbt_observation_obj_pose_ee_hist1,
+    "g1_29dof_wbt_obj_pose_ee_hist4": g1_29dof_wbt_observation_obj_pose_ee_hist4,
+    "g1_29dof_wbt_obj_pose_ee_hist8": g1_29dof_wbt_observation_obj_pose_ee_hist8,
+    "g1_29dof_wbt_obj_pose_ee_hist16": g1_29dof_wbt_observation_obj_pose_ee_hist16,
+    "g1_29dof_wbt_priv_proprio": g1_29dof_wbt_observation_priv_proprio,
+    "g1_29dof_wbt_chunk8_s0": g1_29dof_wbt_observation_chunk8_s0,
+    "g1_29dof_wbt_obj_pose_ee_chunk8_s0": g1_29dof_wbt_observation_obj_pose_ee_chunk8_s0,
+    "g1_29dof_wbt_obj_pose_ee_priv_proprio": g1_29dof_wbt_observation_obj_pose_ee_priv_proprio,
+    "g1_29dof_wbt_priv_proprio_projgrav": g1_29dof_wbt_observation_priv_proprio_projgrav,
+    "g1_29dof_wbt_obj_pose_ee_priv_proprio_projgrav": g1_29dof_wbt_observation_obj_pose_ee_priv_proprio_projgrav,
+}

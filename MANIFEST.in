@@ -1,0 +1,26 @@
+include LICENSE README.md THIRD_PARTY_NOTICES.md CITATION.cff
+recursive-include assets/media *.jpg *.png *.gif *.svg *.json
+include checkpoints/__init__.py checkpoints/README.md
+include checkpoints/example/model.onnx checkpoints/example/model_hero.json
+recursive-include assets *.urdf *.xml *.STL *.stl *.obj *.usda *.json *.md LICENSE*
+recursive-include third_party/holosoma *.py *.toml *.md *.yaml *.yml *.json LICENSE NOTICE THIRD_PARTY_LICENSES CITATION.cff
+recursive-include sim2sim/interactive_client *.py *.html *.css *.js *.mjs *.json *.txt
+recursive-include configs *.py *.md
+recursive-include tests *.py
+recursive-include scripts *.py *.sh
+prune sim2sim/interactive_client/node_modules
+prune sim2sim/interactive_client/dist
+prune sim2sim/interactive_client/public
+prune assets/objects/ycb
+prune build
+prune dist
+prune outputs
+prune results
+prune delivery
+prune runs
+prune logs
+prune wandb
+prune _local_data
+prune data
+recursive-include docs *.md
+global-exclude __pycache__ *.py[cod] .DS_Store

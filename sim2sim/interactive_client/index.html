@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f4ef">
+  <link rel="icon" href="data:,">
+  <title>HERO · Interactive Tabletop Demo</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="#" aria-label="HERO tabletop demo"><span class="brand-mark">H</span> HERO <b>TABLETOP</b></a>
+    <span class="connection" id="connection"><i></i> Loading browser simulation</span>
+  </header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">INTERACTIVE GRASPING</p><h1>From table to tray.</h1></div><p>Place objects. Tell the robot which one to pick.<br>Grasp, lift, and release it into the tray.</p></div>
+    <div class="workspace">
+      <div class="viewers">
+      <section class="viewer-card" aria-label="Live 3D robot simulation">
+        <div class="section-bar"><span id="simulation-indicator" class="simulation-indicator" data-state="loading"><i class="live-dot" aria-hidden="true"></i><span id="simulation-status" role="status" aria-live="polite" aria-atomic="true">Live MuJoCo simulation · Loading</span></span><span id="ik-activity" class="ik-activity" role="status" aria-live="polite" title="Computing collision-avoidance IK…" hidden><i aria-hidden="true"></i><span class="ik-activity-label">Computing collision-avoidance IK…</span></span><div class="view-controls"><button id="view-home" title="Restore the default camera">Default view</button><button id="view-side" title="Inspect the grasp from the side">Side view</button></div></div>
+        <div class="viewport" id="viewport">
+          <canvas id="simulation" aria-label="Live local robot simulation"></canvas><div class="loading-card" id="loading-card" role="status"><span class="loading-spinner"></span><strong id="loading-title">Preparing your tabletop</strong><p id="loading-detail">Loading robot assets and the controller…</p></div>
+          <section class="ego-card" aria-labelledby="ego-camera-label">
+            <div class="ego-bar"><span><i class="live-dot" aria-hidden="true"></i><span id="ego-camera-label">Egocentric RGB (Onboard D435i Camera)</span></span><a class="snapshot-link" href="#" id="ego-snapshot" target="_blank" rel="noopener" title="Open the current egocentric RGB image" aria-label="Open the current egocentric RGB image from the onboard D435i camera">Image ↗</a></div>
+            <div class="ego-viewport"><canvas id="ego-simulation" aria-labelledby="ego-camera-label"></canvas></div>
+          </section>
+          <div class="viewer-hint">Drag to orbit · Scroll to zoom</div>
+          <div class="phase-pill" id="phase-pill" hidden></div>
+          <p id="status-message" role="status" aria-live="polite" hidden></p>
+          <div class="target-legend" id="target-legend" hidden><span id="target-label">Target grasp</span><span class="target-axis axis-x">X</span><span class="target-axis axis-y">Y</span><span class="target-axis axis-z">Z</span><span class="approach-key">→ Path</span></div>
+        </div>
+        <div class="execution">
+          <div class="phase-track" aria-label="Pick-and-place progress"><span data-phase="approach">01 Approach</span><i></i><span data-phase="close">02 Grasp</span><i></i><span data-phase="lift">03 Lift</span><i></i><span data-phase="transfer">04 Transfer</span><i></i><span data-phase="release">05 Release</span><i></i><span data-phase="return_home">06 Return</span></div>
+          <div class="metrics" hidden><div><span>Object lift</span><strong id="lift-value">—</strong></div><div><span id="distance-label">Grasp distance</span><strong id="distance-value">—</strong></div><div><span>Contacts</span><strong id="contact-value">—</strong></div><div><span>Tray placement</span><strong id="deposit-value">Ready</strong></div></div>
+        </div>
+      </section>
+      </div>
+      <aside class="controls">
+        <section class="control-section table-settings">
+          <div class="quick-guide" id="quick-guide" role="note" aria-labelledby="quick-guide-title">
+            <h3 id="quick-guide-title">Quick guide</h3>
+            <ol><li>Click icons to add or select objects.</li><li>Drag objects in the top view.</li><li>Set <strong>Object to pick</strong>; click <strong>Pick &amp; place</strong>.</li></ol>
+            <p>If blocked, click <strong>Reset</strong> to stop and restore the setup.</p>
+          </div>
+          <div class="section-heading"><span class="step">1</span><h2>Choose a table</h2></div><div id="table-options" class="segmented" role="group" aria-label="Table type"></div><div class="height-label"><span>Table height</span><span id="height-value">74 cm</span></div><div id="height-options" class="height-options" role="group" aria-label="Table height"></div><div class="height-label" id="hand-model-label" hidden><span>Hand</span></div><div id="hand-options" class="segmented" role="group" aria-label="Hand model" hidden></div><p id="hand-model-note" class="hand-model-note" role="note" hidden></p>
+        </section>
+        <section class="control-section placement-settings"><div class="section-heading"><span class="step">2</span><h2>Place objects</h2><button class="text-button" id="clear-objects" title="Remove all objects from the scene">Clear</button></div><div id="object-palette" class="object-palette" role="group" aria-label="Add or select an object"></div><div class="map-wrap"><canvas id="placement-map" aria-label="Top-down placement: green shows the placement area; blue shows static IK reachability for the selected object. Left and right regions select the corresponding hand. Select and drag objects or use the sliders below." aria-describedby="ik-workspace-note" tabindex="0"></canvas><span class="map-label">TOP VIEW</span><div class="map-legend"><span class="map-key"><i></i>Placement area</span><span class="map-key ik-map-key" id="ik-workspace-legend"><i></i>Static IK reachability</span></div></div><p class="ik-workspace-note" id="ik-workspace-note"><span id="ik-workspace-status">Calculating IK reach</span><span>Static IK · execution may differ</span></p><p class="map-help">Add different objects, then drag each into position.<br>Click an existing object to select it. The central tray is the drop zone.</p><div id="position-controls" class="position-controls"><label>X <input id="position-x" type="range" step="0.005" aria-label="Object forward position"></label><label>Y <input id="position-y" type="range" step="0.005" aria-label="Object lateral position"></label><label>Yaw <input id="position-yaw" type="range" min="-90" max="90" step="5" aria-label="Object rotation angle"></label><button id="remove-object" class="text-button" title="Remove the selected object">Remove</button></div></section>
+        <section class="control-section action-section">
+          <div class="section-heading"><span class="step">3</span><h2>Pick and place</h2><span id="selected-name" class="selected-name" hidden>No object</span></div>
+          <label class="target-choice" for="pick-object">Object to pick<select id="pick-object" disabled><option value="" disabled selected>Choose an object</option></select></label>
+          <div class="hand-row"><span>Selected hand</span><strong id="active-hand">—</strong></div>
+          <div class="hand-row" hidden><span>Approach</span><strong id="grasp-approach">Horizontal line</strong></div>
+          <div class="hand-row" hidden><span>Palm orientation</span><strong id="grasp-pose">—</strong></div>
+          <div class="hand-row" hidden><span>Pelvis height</span><strong id="pelvis-height">—</strong></div>
+          <div class="action-buttons"><button id="grasp" class="primary-button" disabled>Pick &amp; place <span>↗</span></button><button id="reset" class="reset-button" title="Stop the current attempt and restore the scene setup">Reset</button></div>
+        </section>
+        <section class="control-section tips-section" aria-labelledby="tips-title">
+          <div class="section-heading"><h2 id="tips-title">Controls &amp; tips</h2></div>
+          <ol class="tips-list">
+            <li><strong>Add objects.</strong> Choose a table and height. Click an object icon to add it, or to select it if it is already on the table.</li>
+            <li><strong>Arrange the tabletop.</strong> Drag objects within the shaded placement area in the Top View. Start near the robot and keep the approach path and tray clear.</li>
+            <li><strong>Select a target.</strong> Choose an object from <strong>Object to pick</strong>. The robot uses a horizontal side approach and selects the left or right hand from the object's position.</li>
+            <li><strong>Run the attempt.</strong> Click <strong>Pick &amp; place</strong> to start the grasp and tray placement. The robot retracts its hands after placement.</li>
+            <li><strong>Reset or edit.</strong> <strong>Reset</strong> restores the robot and your saved object layout. <strong>Remove</strong> deletes the selected object; <strong>Clear</strong> removes all objects.</li>
+            <li><strong>Inspect the motion.</strong> Drag the 3D view to orbit; scroll to zoom. The top-right inset shows the live view from the onboard D435i camera.</li>
+          </ol>
+          <p class="tips-note"><strong>Browser IK:</strong> Inverse kinematics runs directly on your CPU in the browser, without cuRobo. Solve times, IK solutions, and resulting robot motion may differ from cuRobo running on CUDA.</p>
+          <p class="tips-note"><strong>Keep the tray clear:</strong> Objects already resting in the tray can leave no collision-free release path for the next placement, so the arm may jitter or hesitate above the tray while it searches for one. <strong>Remove</strong> or <strong>Clear</strong> placed objects before picking the next one.</p>
+        </section>
+      </aside>
+    </div>
+    <p id="scenario-note" class="scenario-note presentation-detail" role="status" hidden></p>
+    <footer hidden><span>Runs on your device · Physical contact and gravity · Partial tray support counts</span><span id="simulation-rate" aria-live="off"></span><span id="mode-note"></span></footer>
+  </main>
+  <div id="toast" class="toast" role="alert" hidden></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

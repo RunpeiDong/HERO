@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hero-isaacsim"
+version = "0.1.0"
+description = "HERO whole-body control: Isaac Sim training and interactive inference"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+  "numpy>=1.24,<2",
+  "scipy>=1.10",
+  "mujoco>=3.3,<4",
+  "mink>=1.3,<2",
+  "daqp>=0.6",
+  "onnxruntime>=1.18,<2",
+]
+
+[project.optional-dependencies]
+# Install the bundled, patched third_party/holosoma distribution for training;
+# an arbitrary package with the same name is not an equivalent dependency.
+train = [
+  "torch>=2.4",
+  "onnx>=1.16,<2",
+  "pydantic>=2,<3",
+  "tyro>=1.0",
+  "loguru>=0.7",
+  "omegaconf>=2.3",
+  "tensorboard>=2.14",
+  "tensordict>=0.5",
+  "rich>=13",
+  "wandb==0.22.0",
+  # Imported by the bundled backend (installed with --no-deps); Isaac Lab ships trimesh but not the rest.
+  "trimesh>=4",
+  "tqdm>=4.60",
+  "opencv-python-headless>=4.8",
+]
+dev = ["pytest>=8", "build>=1.2"]
+# MuJoCo benchmark scoring (sim2sim.bench): the runner, the mink IK of the closed-loop replanner and the ONNX policy.  Same pins as the
+# core dependencies (minus scipy, which nothing in sim2sim/bench, data_tools or scripts/hero_bench.py imports); listed so
+# `pip install -e ".[bench]"` names the scoring stack explicitly.
+bench = [
+  "numpy>=1.24,<2",
+  "mujoco>=3.3,<4",
+  "mink>=1.3,<2",
+  "daqp>=0.6",
+  "onnxruntime>=1.18,<2",
+]
+demo = ["Pillow>=10"]
+
+[project.scripts]
+hero-prepare-amass = "data_tools.prepare_amass:main"
+
+[tool.setuptools]
+include-package-data = true
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+
+[tool.setuptools.package-data]
+configs = ["*.md"]
+hero_assets = ["**/*.urdf", "**/*.xml", "**/*.STL", "**/*.stl", "**/*.obj", "**/*.usda", "**/*.json", "**/*.md", "**/LICENSE*"]
+hero_checkpoints = ["README.md", "example/model.onnx", "example/model_hero.json"]
+"sim2sim.interactive_client" = ["*.html", "*.css", "*.js", "*.mjs", "*.json", "licenses/*.txt"]
+
+[tool.setuptools.exclude-package-data]
+hero_assets = ["objects/ycb/*", "objects/ycb/**/*", "robots/converted*/*", "robots/converted*/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "mujoco: needs the mujoco package (benchmark plant / IK tests)",
+  "bench_data: needs a local hero_bench_v1 corpus (HERO_BENCH_V1_DIR) or reference results (HERO_BENCH_RESULTS_DIR)",
+]
