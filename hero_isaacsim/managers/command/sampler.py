@@ -10,6 +10,30 @@ from loguru import logger
 
 from holosoma.managers.command.terms.wbt import AdaptiveTimestepsSampler
 
+SAMPLING_SEMANTICS = "source_conditional_v1"
+"""Name of the rule that turns the failure table into clip probabilities (see
+:meth:`HeroAdaptiveTimestepsSampler._shape_clip_marginal`). Stored with every saved failure table; a table written
+under another rule is refused on load instead of silently resuming into a different training distribution."""
+
+
+def expected_sampling_policy(
+    *,
+    uniform_ratio: float,
+    clip_temperature: float = 1.0,
+    clip_max_probability: float = 1.0,
+    clip_cap_relative: float | None = None,
+) -> dict[str, Any]:
+    """The ``sampling_policy`` block a :class:`HeroAdaptiveTimestepsSampler` with these settings writes into its state.
+
+    Lets a launcher compare a checkpoint's saved table against a motion configuration before the environment exists."""
+    return {
+        "adaptive_uniform_ratio": float(uniform_ratio),
+        "adaptive_clip_temperature": float(clip_temperature),
+        "adaptive_clip_max_probability": float(clip_max_probability),
+        "clip_cap_relative": None if clip_cap_relative is None else float(clip_cap_relative),
+        "semantics": SAMPLING_SEMANTICS,
+    }
+
 
 def build_clip_prior(
     clip_source_tag_id: torch.Tensor,
@@ -93,7 +117,8 @@ class HeroAdaptiveTimestepsSampler(AdaptiveTimestepsSampler):
             if not clip_cap_relative >= 1.0:
                 raise ValueError(f"clip_cap_relative must be >= 1 (1 == exactly the prior), got {clip_cap_relative!r}")
         #: Per-clip bound on the failure-weighted draw probability, as a multiple of the clip's prior share
-        #: (``None`` = unbounded). Unlike a flat absolute cap it never starves small sources or zeroes exclusions.
+        #: (``None`` = unbounded), applied inside each source. Unlike a flat absolute cap it never starves small
+        #: sources or zeroes exclusions.
         self.clip_cap_relative = clip_cap_relative
         super().__init__(motion_time_step_total, device, env_fps, num_clips=num_clips, **kwargs)
         if clip_prior is None:
@@ -116,6 +141,22 @@ class HeroAdaptiveTimestepsSampler(AdaptiveTimestepsSampler):
             self.source_tag_ids = None
         #: Transient per-clip eligibility mask (shape-aware draws); set only for the duration of a masked draw.
         self._active_clip_mask: torch.Tensor | None = None
+        #: Groups whose episode share is held at the prior's: one group per source tag, a single group without tags.
+        self._group_ids = (
+            self.source_tag_ids
+            if self.source_tag_ids is not None
+            else torch.zeros(self.num_motions, dtype=torch.long, device=self.device)
+        )
+        self._num_groups = int(self._group_ids.max().item()) + 1
+        if self._prior_applies_to_table and (
+            self.adaptive_clip_temperature != 1.0 or self.adaptive_clip_max_probability < 1.0
+        ):
+            raise ValueError(
+                "HeroAdaptiveTimestepsSampler holds every source at its source_weights share and weights failures only "
+                "inside a source; adaptive_clip_temperature / adaptive_clip_max_probability act on the backend's "
+                "prior-free clip marginal, which this sampler does not use -- leave them at 1.0 and bound clips with "
+                "clip_cap_relative"
+            )
 
     # ------------------------------------------------------------------ prior application
     @property
@@ -128,7 +169,9 @@ class HeroAdaptiveTimestepsSampler(AdaptiveTimestepsSampler):
 
         The solution keeps the proportions of the uncapped entries: ``q_i = min(cap_i, s * prob_i)`` with the
         scale ``s`` found on the support sorted by ``prob_i / cap_i``. Entries with ``cap_i == 0`` get exactly 0.
-        Feasibility requires ``sum(cap) >= 1`` (callers guarantee it: the caps are a multiple >= 1 of a prior)."""
+        The projection can only scale existing mass, so an entry with ``prob_i == 0`` stays at 0 whatever its cap:
+        feasibility therefore requires the caps of the entries that carry mass to sum to at least 1, which is checked
+        here (a violation raises instead of renormalising past the caps)."""
         tiny = torch.finfo(prob.dtype).tiny
         support = cap > 0
         prob = torch.where(support, prob, torch.zeros_like(prob))
@@ -138,8 +181,12 @@ class HeroAdaptiveTimestepsSampler(AdaptiveTimestepsSampler):
         prob = prob / total
         if bool((prob <= cap + 1.0e-12).all()):
             return prob
-        if float(cap.sum()) < 1.0 - 1.0e-6:
-            raise ValueError(f"clip cap projection infeasible: caps sum to {float(cap.sum()):.6f} < 1")
+        reachable = float(cap[prob > 0].sum())
+        if reachable < 1.0 - 1.0e-6:
+            raise ValueError(
+                f"clip cap projection infeasible: the caps of the entries with probability mass sum to {reachable:.6f} < 1 "
+                "(entries at zero probability cannot absorb mass)"
+            )
         ratio = torch.where(support, prob / cap.clamp_min(tiny), torch.zeros_like(prob))
         order = torch.argsort(ratio, descending=True)
         prob_s, cap_s = prob[order], cap[order]
@@ -153,34 +200,70 @@ class HeroAdaptiveTimestepsSampler(AdaptiveTimestepsSampler):
         projected = torch.minimum(cap, scale[k] * prob)
         return projected / projected.sum()
 
-    def _shape_clip_marginal(self, probabilities: torch.Tensor) -> torch.Tensor:
-        """Failure-weighted clip marginal x source prior (x eligibility mask), bounded per clip relative to the prior.
+    def _project_within_groups(self, within: torch.Tensor, cap: torch.Tensor) -> torch.Tensor:
+        """``_project_with_vector_cap`` applied separately inside every group with an entry above its cap.
 
-        Order matters: the parent first shapes the prior-free failure/uniform table (temperature, optional absolute
-        cap), THEN the prior multiplies the clip marginal, so the documented ``source_weights`` are reproduced exactly
-        when failures are uniform and a zero-weight (or masked) clip gets exactly zero. ``clip_cap_relative`` finally
-        bounds every clip at that multiple of its prior share, which stops one clip from absorbing the sampler
-        without starving sources that have few clips."""
+        Each group keeps its total mass (1 inside the group), so the source shares are untouched. Feasible because
+        :meth:`_shape_clip_marginal` gives every clip with a positive cap a positive probability (the caps of the
+        clips that carry mass then sum to ``clip_cap_relative >= 1`` inside each group); a caller that passes zero
+        probabilities on part of the support gets the projection's infeasibility error instead of a violated cap."""
+        over = within > cap + 1.0e-12
+        if not bool(over.any()):
+            return within
+        out = within.clone()
+        for g in torch.unique(self._group_ids[over]).tolist():
+            idx = (self._group_ids == g).nonzero(as_tuple=False).flatten()
+            out[idx] = self._project_with_vector_cap(within[idx], cap[idx])
+        return out
+
+    def _shape_clip_marginal(self, probabilities: torch.Tensor) -> torch.Tensor:
+        """Source shares from the prior, failure weighting only inside a source.
+
+        For clip ``i`` of source ``s``: ``q_i = W_s * ((1 - u) * F_i / F_s + u * p_i / W_s)`` with ``W_s`` the source's
+        prior mass (``source_weights``, masked for shape-aware draws), ``F_i`` the clip's failure EMA (row sum of
+        ``bin_failed_count``), ``F_s`` the source total and ``u = adaptive_uniform_ratio``; a source without failures
+        uses its prior shares. Every source therefore keeps exactly its documented share, a zero-weight (or masked)
+        clip gets exactly zero, and with equal per-draw failure probabilities the steady state is the prior itself:
+        failures accumulate in proportion to draws, so ``F_i / F_s`` converges to ``q_i / W_s``. (Multiplying the raw
+        failure counts by the prior instead squares the prior: clips of small sources with a large per-clip share
+        reinforce themselves until a cap stops them, and the effective number of clips collapses.) ``clip_cap_relative``
+        bounds each clip at that multiple of its prior share inside its source by water-filling, which preserves the
+        source mass exactly. The phase distribution inside a clip is the parent's table row."""
         if not self._prior_applies_to_table:
             return super()._shape_clip_marginal(probabilities)
-        shaped = super()._shape_clip_marginal(probabilities)
-        table = shaped.view(self.num_clips, self.num_bins)
+        table = super()._shape_clip_marginal(probabilities).view(self.num_clips, self.num_bins)
         tiny = torch.finfo(table.dtype).tiny
-        marginal = table.sum(dim=1)
-        weight = self.clip_prior
+        # Per-clip vectors in float64: the float32 failure EMA decays old failures into denormals, where a float32
+        # normalisation (clamped at finfo.tiny) would silently drop part of a source's mass.
+        weight = self.clip_prior.to(dtype=torch.float64)
+        tiny64 = torch.finfo(torch.float64).tiny
         mask = self._active_clip_mask
         if mask is not None:
             weight = weight * mask.to(device=weight.device, dtype=weight.dtype)
-        weighted = marginal * weight
-        total = weighted.sum()
-        if total <= 0:
+        groups = self._group_ids
+        group_prior = torch.zeros(self._num_groups, dtype=weight.dtype, device=weight.device).index_add_(0, groups, weight)
+        if not bool(group_prior.sum() > 0):
             if mask is not None:
                 raise ValueError("masked clip draw: no eligible clip carries probability mass (clip_mask all False or all masked clips have zero prior)")
             raise ValueError("clip prior leaves no clip with probability mass")
-        clip_prob = weighted / total
+        fail = torch.where(weight > 0, self.bin_failed_count.sum(dim=1, dtype=torch.float64), torch.zeros_like(weight))
+        group_fail = torch.zeros_like(group_prior).index_add_(0, groups, fail)
+        base = weight / group_prior[groups].clamp_min(tiny64)  # prior share inside the source (sums to 1 per source)
+        fail_share = torch.where(group_fail[groups] > 0, fail / group_fail[groups].clamp_min(tiny64), base)
+        u = float(self.adaptive_uniform_ratio)
+        within = (1.0 - u) * fail_share + u * base
         if self.clip_cap_relative is not None:
-            share = weight / weight.sum()
-            clip_prob = self._project_with_vector_cap(clip_prob, share * float(self.clip_cap_relative))
+            # With ``u == 0`` a clip that never failed has ``within == 0``; water-filling can only scale existing mass,
+            # so the cap would be unenforceable whenever a source's failing clips are fewer than ``n_s / K`` (their
+            # caps alone cannot hold the source's mass). A positive floor on the prior support (``base > 0``, where the
+            # cap is positive too) lets the projection spill the excess onto the other clips of the same source, as
+            # the parent's ``_project_with_probability_cap`` does with ``clamp_min(eps)``; the floor is far below
+            # float32 resolution, so without a projection it changes nothing.
+            within = torch.where(base > 0, within.clamp_min(tiny64), within)
+            within = self._project_within_groups(within, base * float(self.clip_cap_relative))
+        clip_prob = group_prior[groups] * within
+        clip_prob = (clip_prob / clip_prob.sum()).to(dtype=table.dtype)
+        marginal = table.sum(dim=1)
         uniform_phase = torch.full_like(table, 1.0 / float(self.num_bins))
         conditional = torch.where(marginal[:, None] > 0.0, table / marginal.clamp_min(tiny)[:, None], uniform_phase)
         return (conditional * clip_prob[:, None]).reshape(-1)
@@ -295,6 +378,15 @@ class HeroAdaptiveTimestepsSampler(AdaptiveTimestepsSampler):
         return {k: float(v.item()) for k, v in self._fractions_by_source(self.clip_prior).items()}
 
     # ------------------------------------------------------------------ checkpointing
+    def sampling_policy(self) -> dict[str, Any]:
+        """The parent's policy plus the relative clip cap and the name of the composition rule (checked on load)."""
+        return expected_sampling_policy(
+            uniform_ratio=self.adaptive_uniform_ratio,
+            clip_temperature=self.adaptive_clip_temperature,
+            clip_max_probability=self.adaptive_clip_max_probability,
+            clip_cap_relative=self.clip_cap_relative,
+        )
+
     def state_dict(self) -> dict[str, Any]:
         state = super().state_dict()
         state["hero_clip_prior"] = self.clip_prior.detach().cpu().clone()

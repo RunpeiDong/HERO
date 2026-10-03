@@ -66,15 +66,18 @@ The generator writes reach-bank clips (`clips/*.npz`), not training clips: they 
 ```bash
 python -m data_tools.npz_convert \
   --in-dir data/ik_examples/clips --out-dir data/combined \
-  --source-tag ik_example --jobs 8
+  --source-tag ik_reach_example --license-class research-only --jobs 8
 cp data/amass/*.npz data/combined/
 ```
 
-`--license-class` records a provenance label for the generated clips (default `research-only`). Then write `data/combined/CORPUS_MANIFEST.json` with one non-negative weight per source tag, for example:
+`--license-class` records a provenance label for the generated clips; the converter's default is `unknown`, so pass `research-only` (the label `prepare_amass.py` stamps on AMASS) or the class that applies to your data. Then write `data/combined/CORPUS_MANIFEST.json` with one non-negative weight per source tag, for example:
 
 ```json
-{"source_weights": {"amass": 0.5, "ik_example": 0.5}, "source_tags": ["amass", "ik_example"]}
+{"source_weights": {"amass": 0.5, "ik_reach_example": 0.5}, "source_tags": ["amass", "ik_reach_example"],
+ "clip_end_policy_by_source": {"amass": "rollover", "ik_reach_example": "hold"}}
 ```
+
+`clip_end_policy_by_source` decides what happens when a reference clip ends: `rollover` teleports the robot onto a new clip and continues the episode (mocap default); `hold` ends the episode at the clip's last frame (counted as a timeout, not a failure; the reference is pinned to that frame), so a held clip contributes at most its own length per episode (from the sampled start phase to its last frame), never more (generated reaching clips). The training configuration already applies `hold` to the `ik_reach_example` tag; the manifest entry overrides the defaults for any tag, so keep the tag you pass to `--source-tag` identical in the clips, the manifest, and this map. The training log reports the resulting census as `clip end policy rollover=N hold=M`.
 
 Keep the clips' source and parent identifiers, and preserve parent-sequence separation between training and evaluation. IK data is never automatically added to `data/amass`.
 

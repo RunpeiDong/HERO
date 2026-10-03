@@ -153,11 +153,11 @@ def test_launcher_defaults_are_local_amass_and_paper_recipe(tmp_path):
 
 def test_mixed_data_requires_opt_in_and_objects_are_rejected(tmp_path):
     script = load_script("train")
-    corpus = make_corpus(tmp_path, "reach_example")
+    corpus = make_corpus(tmp_path, "ik_reach_example")
     with pytest.raises(ValueError, match="AMASS only"):
         script.build_config(script.parser().parse_args(["--motion-dir", str(corpus)]))
     cfg = script.build_config(script.parser().parse_args(["--motion-dir", str(corpus), "--allow-mixed-data"]))
-    assert cfg.command.setup_terms["motion_command"].params["motion_config"].source_weights == {"reach_example": 1.0}
+    assert cfg.command.setup_terms["motion_command"].params["motion_config"].source_weights == {"ik_reach_example": 1.0}
     make_corpus(tmp_path, has_object=True)
     with pytest.raises(ValueError, match="object clips"):
         script.build_config(script.parser().parse_args(["--motion-dir", str(corpus)]))
@@ -260,18 +260,26 @@ def test_checkpoint_from_the_other_actor_family_is_rejected():
 
 def test_default_motion_sampler_cannot_collapse_onto_one_clip():
     """The adaptive sampler must keep a per-clip cap and a uniform floor (the backend defaults let one clip take over)."""
-    from hero_isaacsim.config_values.command import get_motion_config
-    from hero_isaacsim.config_values.sampler import feasible_clip_max_probability, with_feasible_sampler_cap
+    from hero_isaacsim.config_values.command import get_motion_config, make_hero_motion_config
+    from hero_isaacsim.config_values import sampler as sampler_settings
     for cfg in DEFAULTS.values():
         mc = get_motion_config(cfg.command)
         assert mc.use_adaptive_timesteps_sampler and mc.adaptive_sampler_per_clip
         assert mc.adaptive_sampler_clip_max_probability == 1.0  # the absolute cap stays off: it would starve small sources
         assert mc.adaptive_sampler_clip_max_relative == 10.0
         assert mc.adaptive_sampler_uniform_ratio == 0.3
-    # the absolute-cap helper is still correct for configs that opt into it
-    assert feasible_clip_max_probability(29548, 0.001) == 0.001
-    assert feasible_clip_max_probability(20, 0.001) == 0.05
-    assert with_feasible_sampler_cap(get_motion_config(DEFAULTS["without_delta_anchor"].command), num_clips=20).adaptive_sampler_clip_max_probability == 1.0
+    # the backend's absolute cap / temperature are refused at configuration time for the per-clip HERO sampler, naming
+    # the relative cap as the knob -- not lifted to 1 / num_clips first and refused by the sampler afterwards
+    with pytest.raises(ValueError, match="adaptive_sampler_clip_max_relative"):
+        make_hero_motion_config(adaptive_sampler_clip_max_probability=0.001)
+    with pytest.raises(ValueError, match="adaptive_sampler_clip_max_relative"):
+        make_hero_motion_config(adaptive_sampler_clip_temperature=0.5)
+    make_hero_motion_config(adaptive_sampler_per_clip=False, adaptive_sampler_clip_max_probability=0.001)  # backend mode keeps the backend knobs
+    # so there is no per-corpus "feasible cap" to lift for a HERO config: the helpers that did so are gone (nothing used
+    # them, and their dict-form HERO detection missed pre-fix saved configs); the settings module keeps the two constants
+    assert mc.adaptive_sampler_uniform_ratio == sampler_settings.ADAPTIVE_UNIFORM_RATIO
+    assert mc.adaptive_sampler_clip_max_relative == sampler_settings.ADAPTIVE_CLIP_MAX_RELATIVE
+    assert not any(name.startswith(("with_feasible", "feasible_", "count_corpus")) for name in dir(sampler_settings))
 
 
 def _sampler(n_a, n_b, w_a, w_b, relative=10.0, uniform=0.3):

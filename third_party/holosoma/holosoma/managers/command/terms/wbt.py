@@ -1071,6 +1071,46 @@ class AdaptiveTimestepsSampler:
         self.current_bin_failed_count = torch.zeros(rows, self.num_bins, dtype=torch.float, device=self.device)
         self.bin_failed_count = torch.zeros(rows, self.num_bins, dtype=torch.float, device=self.device)
 
+    def sampling_policy(self) -> dict[str, Any]:
+        """Settings that turn the failure table into draw probabilities.
+
+        Stored next to the table by :meth:`state_dict` and compared entry by entry
+        by :meth:`load_state_dict`, so a table cannot resume under a different
+        sampling rule.  Subclasses that change the composition add their own
+        entries (numbers are compared with a tolerance, everything else exactly).
+        """
+
+        return {
+            "adaptive_uniform_ratio": float(self.adaptive_uniform_ratio),
+            "adaptive_clip_temperature": float(self.adaptive_clip_temperature),
+            "adaptive_clip_max_probability": float(self.adaptive_clip_max_probability),
+        }
+
+    @staticmethod
+    def sampling_policy_mismatches(saved: Mapping[str, Any] | None, expected: Mapping[str, Any]) -> dict[str, Any]:
+        """``{key: (saved, expected)}`` for every expected policy entry that ``saved`` lacks or disagrees with."""
+
+        if not isinstance(saved, Mapping):
+            raise TypeError("adaptive sampler sampling_policy must be a mapping")
+        mismatches: dict[str, Any] = {}
+        for key, value in expected.items():
+            if key not in saved:
+                mismatches[key] = (None, value)
+                continue
+            have = saved[key]
+            numeric = isinstance(value, (int, float)) and not isinstance(value, bool)
+            if numeric:
+                same = (
+                    isinstance(have, (int, float))
+                    and not isinstance(have, bool)
+                    and bool(np.isclose(float(have), float(value), rtol=0.0, atol=1.0e-12))
+                )
+            else:
+                same = have == value
+            if not same:
+                mismatches[key] = (have, value)
+        return mismatches
+
     def state_dict(self) -> dict[str, Any]:
         """Return the persistent adaptive curriculum state.
 
@@ -1088,11 +1128,7 @@ class AdaptiveTimestepsSampler:
             "num_clips": int(self.num_clips),
             "phase_binning": bool(self.phase_binning),
             "per_clip": bool(self.per_clip),
-            "sampling_policy": {
-                "adaptive_uniform_ratio": float(self.adaptive_uniform_ratio),
-                "adaptive_clip_temperature": float(self.adaptive_clip_temperature),
-                "adaptive_clip_max_probability": float(self.adaptive_clip_max_probability),
-            },
+            "sampling_policy": self.sampling_policy(),
             "bin_failed_count": self.bin_failed_count.detach().cpu().clone(),
             "current_bin_failed_count": self.current_bin_failed_count.detach().cpu().clone(),
         }
@@ -1124,11 +1160,7 @@ class AdaptiveTimestepsSampler:
                 f"{mismatches}"
             )
 
-        expected_policy = {
-            "adaptive_uniform_ratio": float(self.adaptive_uniform_ratio),
-            "adaptive_clip_temperature": float(self.adaptive_clip_temperature),
-            "adaptive_clip_max_probability": float(self.adaptive_clip_max_probability),
-        }
+        expected_policy = self.sampling_policy()
         checkpoint_policy = state.get("sampling_policy")
         if checkpoint_policy is None:
             # Checkpoints created before capped/tempered sampling had exactly
@@ -1139,14 +1171,7 @@ class AdaptiveTimestepsSampler:
                 "adaptive_clip_temperature": 1.0,
                 "adaptive_clip_max_probability": 1.0,
             }
-        if not isinstance(checkpoint_policy, Mapping):
-            raise TypeError("adaptive sampler sampling_policy must be a mapping")
-        policy_mismatches = {
-            key: (checkpoint_policy.get(key), value)
-            for key, value in expected_policy.items()
-            if checkpoint_policy.get(key) is None
-            or not np.isclose(float(checkpoint_policy[key]), value, rtol=0.0, atol=1.0e-12)
-        }
+        policy_mismatches = self.sampling_policy_mismatches(checkpoint_policy, expected_policy)
         if policy_mismatches:
             raise ValueError(
                 "adaptive sampler checkpoint sampling policy differs from the live configuration: "

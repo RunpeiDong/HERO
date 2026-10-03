@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from hero_isaacsim.managers.command.hero import HeroMotionConfig, coerce_hero_motion_config
 
-from dataclasses import field, replace
+from dataclasses import field, fields, replace
+from typing import Mapping
 
 from holosoma.config_types.command import CommandManagerCfg, CommandTermCfg, MotionConfig, NoiseToInitialPoseConfig
 
@@ -32,7 +33,12 @@ BODY_NAMES_TO_TRACK: list[str] = [
 
 BODY_NAME_REF: list[str] = ["pelvis"]  # HERO anchors everything at the pelvis (full orientation)
 
-DEFAULT_CLIP_END_POLICY_BY_SOURCE = {"amass": "rollover", "reach_example": "hold"}
+IK_REACH_SOURCE_TAG = "ik_reach_example"
+"""Source tag of the generated reaching clips (``data_tools.npz_convert --source-tag``, see docs/data.md)."""
+
+DEFAULT_CLIP_END_POLICY_BY_SOURCE = {"amass": "rollover", IK_REACH_SOURCE_TAG: "hold"}
+"""Mocap clips roll over into a new clip when they end; generated reaching clips hold their last frame. A corpus
+manifest's ``clip_end_policy_by_source`` is overlaid on these defaults by ``scripts/train.py``."""
 
 init_pose_config = NoiseToInitialPoseConfig(
     overall_noise_scale=1.0,
@@ -91,13 +97,39 @@ def get_motion_config(cfg: CommandManagerCfg) -> HeroMotionConfig:
     return coerce_hero_motion_config(cfg.setup_terms[COMMAND_TERM_NAME].params["motion_config"])
 
 def with_motion_config(cfg: CommandManagerCfg, **overrides) -> CommandManagerCfg:
-    mc = replace(get_motion_config(cfg), **overrides)
+    """``cfg`` with the motion config's fields replaced by ``overrides``.
+
+    A checkpoint's saved motion config is a plain dict; the overrides are applied to it *before* it is coerced into a
+    ``HeroMotionConfig``, so values the dataclass refuses today (e.g. a pre-release absolute clip cap) can be
+    replaced instead of failing validation first."""
+    raw = cfg.setup_terms[COMMAND_TERM_NAME].params["motion_config"]
+    if isinstance(raw, Mapping):
+        mc = coerce_hero_motion_config({**raw, **overrides})
+    else:
+        mc = replace(coerce_hero_motion_config(raw), **overrides)
     return replace(
         cfg,
         setup_terms={
             COMMAND_TERM_NAME: replace(cfg.setup_terms[COMMAND_TERM_NAME], params={"motion_config": mc}),
         },
     )
+
+INFERENCE_SAMPLER_FIELDS: tuple[str, ...] = ("use_adaptive_timesteps_sampler",) + tuple(
+    f.name for f in fields(HeroMotionConfig) if f.name.startswith("adaptive_sampler_"))
+"""Motion-config fields an inference-only environment (export, evaluation) takes from the live preset rather than
+from the checkpoint: the sampler only matters for training draws, and a checkpoint's saved sampler settings may be
+ones the current code refuses."""
+
+def with_inference_motion_config(saved: CommandManagerCfg, preset: CommandManagerCfg, *, motion_dir: str) -> CommandManagerCfg:
+    """The saved command config of a checkpoint, made loadable for inference-only use (ONNX export, evaluation).
+
+    Keeps every reference / command setting the policy was trained with, points it at ``motion_dir``, takes the
+    sampler settings (:data:`INFERENCE_SAMPLER_FIELDS`) from ``preset`` and sets ``reset_sampler_on_resume`` so a
+    saved failure table the live sampler cannot load is dropped with a warning instead of an error: nothing is
+    sampled for training, so neither the table nor its settings can change what the exported policy does."""
+    preset_mc = get_motion_config(preset)
+    overrides = {name: getattr(preset_mc, name) for name in INFERENCE_SAMPLER_FIELDS}
+    return with_motion_config(saved, motion_dir=str(motion_dir), reset_sampler_on_resume=True, **overrides)
 
 hero_h1_motion_config = make_hero_motion_config()
 

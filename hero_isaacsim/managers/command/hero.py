@@ -160,8 +160,14 @@ class HeroMotionConfig(MotionConfig):
 
     adaptive_sampler_clip_max_relative: float | None = None
     """Bound on any clip's failure-weighted draw probability as a multiple of its prior share (source weight / clips
-    of that source); ``None`` = unbounded. Applied after the source prior, so ``source_weights`` stay honoured and a
-    zero-weight source stays at zero while no single clip can absorb the sampler."""
+    of that source), applied inside each source; ``None`` = unbounded. ``source_weights`` stay honoured exactly, a
+    zero-weight source stays at zero and no single clip can absorb the sampler."""
+
+    reset_sampler_on_resume: bool = False
+    """Allow a resume to discard the checkpoint's adaptive-sampler failure table and start it from zeros when the
+    live sampler cannot load it (different sampling rule or settings, different clip registry). Off by default: such
+    a resume raises instead of silently training on a different clip distribution. ``scripts/train.py
+    --reset-sampler-on-resume`` sets it."""
 
     source_weights_from_manifest: bool = False
     """Load source weights and clip-end policies from ``CORPUS_MANIFEST.json`` at setup.
@@ -201,6 +207,20 @@ class HeroMotionConfig(MotionConfig):
             raise ValueError("max_start_bottom_z_m must be finite or None")
         if self.adaptive_sampler_clip_max_relative is not None and not self.adaptive_sampler_clip_max_relative >= 1.0:
             raise ValueError("adaptive_sampler_clip_max_relative must be >= 1 or None")
+        if self.use_adaptive_timesteps_sampler and self.adaptive_sampler_per_clip and (
+            self.adaptive_sampler_clip_max_probability < 1.0 or self.adaptive_sampler_clip_temperature != 1.0
+        ):
+            # The per-clip HERO sampler holds every source at its source_weights share and weights failures only
+            # inside a source; the backend's absolute clip cap / temperature act on a prior-free clip marginal it
+            # never uses, and an absolute cap below 1 / num_clips would also need lifting per corpus. Refused at
+            # configuration time (the sampler refuses it again at construction) with the supported alternative.
+            raise ValueError(
+                "HeroMotionConfig: adaptive_sampler_clip_max_probability="
+                f"{self.adaptive_sampler_clip_max_probability!r} / adaptive_sampler_clip_temperature="
+                f"{self.adaptive_sampler_clip_temperature!r} are the backend's prior-free clip-marginal controls, which "
+                "the per-clip HERO sampler does not use; leave both at 1.0 and bound clips with "
+                "adaptive_sampler_clip_max_relative (a multiple of each clip's prior share, >= 1)"
+            )
 
 
 HERO_MOTION_CONFIG_V4_FIELDS: tuple[str, ...] = (
@@ -406,6 +426,11 @@ class HeroMotionCommand(MotionCommand):
         super().__init__(_with_hero_motion_config(cfg), env)
         self.hero_cfg: HeroMotionConfig = self.motion_cfg  # type: ignore[assignment]
         self._in_soft_reset = False
+        #: Set by ``HeroTrackingManager.reset_all`` (the forced all-env reset at agent construction and at ``learn()``
+        #: entry): that reset is infrastructure, not an episode end, so the next ``_update_h_curriculum`` must not
+        #: apply the short-episode step to every environment (it would shift a scale restored from a checkpoint by
+        #: ``-h_curriculum_down``). Mirrors ``_skip_adaptive_update_once`` for the sampler table.
+        self._skip_h_curriculum_update_once = False
 
     # ------------------------------------------------------------------ setup
     def setup(self) -> None:
@@ -855,8 +880,12 @@ class HeroMotionCommand(MotionCommand):
 
     def _update_h_curriculum(self, env_ids: torch.Tensor) -> None:
         cfg = self.hero_cfg
+        skip_once = bool(getattr(self, "_skip_h_curriculum_update_once", False))
+        self._skip_h_curriculum_update_once = False
         if self._env.is_evaluating:
             self.h_curriculum_scale[env_ids] = 1.0
+            return
+        if skip_once:
             return
         lengths = self._episode_lengths_at_reset(env_ids)
         scale = self.h_curriculum_scale[env_ids]

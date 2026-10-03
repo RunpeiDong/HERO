@@ -397,6 +397,24 @@ class PPO(BaseAlgo):
         self.actor_obs_normalizer.train()
         self.critic_obs_normalizer.train()
 
+    def _randomize_initial_episode_lengths(self) -> None:
+        """Start the environments of a FRESH run at random points of their first episode (``init_at_random_ep_len``).
+
+        The offsets desynchronise the first time-outs, but the episode-length bookkeeping cannot tell them apart from
+        steps actually taken: the first episode of every environment is reported up to ``max_episode_length`` steps
+        too long.  On a fresh start that only perturbs an untrained average-episode-length tracker.  On a resume it
+        inflates the RESTORED tracker and, through it, every episode-length-driven curriculum (penalty scale, height
+        offset) for tens of iterations before the EMA recovers.  A resumed run therefore keeps the counters as
+        ``reset_all()`` leaves them (all environments synchronised; the reset's single zero-action step puts them at
+        1); its trained policy desynchronises the environments through its own terminations.  The fresh-start path
+        is unchanged (one ``randint_like`` draw from the same generator state).
+        """
+        if not self.config.init_at_random_ep_len or self.current_learning_iteration > 0:
+            return
+        self.env.episode_length_buf = torch.randint_like(
+            self.env.episode_length_buf, high=int(self.env.max_episode_length)
+        )
+
     def learn(self):
         self._train_mode()
 
@@ -404,10 +422,7 @@ class PPO(BaseAlgo):
 
         # Initialize environments with different episode length buffers
         # Must happen AFTER reset_all() to avoid being overwritten by reset
-        if self.config.init_at_random_ep_len:
-            self.env.episode_length_buf = torch.randint_like(
-                self.env.episode_length_buf, high=int(self.env.max_episode_length)
-            )
+        self._randomize_initial_episode_lengths()
         for obs_key in obs_dict:
             obs_dict[obs_key] = obs_dict[obs_key].to(self.device)
 

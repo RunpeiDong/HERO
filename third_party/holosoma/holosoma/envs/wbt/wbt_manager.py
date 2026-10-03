@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Mapping
 
 import torch
+from loguru import logger
 
 from holosoma.envs.base_task.base_task import BaseTask
 from holosoma.utils.rotations import quat_error_magnitude
@@ -207,12 +208,37 @@ class WholeBodyTrackingManager(BaseTask):
             getattr(self, "use_domain_rand_scale_curriculum", False)
         )
 
+    AVERAGE_EPISODE_TRACKER_TERM = "average_episode_tracker"
+
+    def _stateful_curriculum_terms(self) -> dict[str, Any]:
+        """Curriculum terms with a ``state_dict`` / ``load_state_dict`` pair, except the episode-length tracker.
+
+        The tracker is persisted under its own key (and gets ``suppress_next_update`` on load); every other stateful
+        term -- the penalty scale, an object-mass range, ... -- is persisted generically under ``curriculum_terms``.
+        Without it a resume restarts those curricula at their initial values while the logged scalar still looks
+        continuous."""
+
+        manager = getattr(self, "curriculum_manager", None)
+        iter_terms = getattr(manager, "iter_terms", None)
+        if not callable(iter_terms):
+            return {}
+        return {
+            name: term
+            for name, term in iter_terms()
+            if name != self.AVERAGE_EPISODE_TRACKER_TERM
+            and callable(getattr(term, "state_dict", None))
+            and callable(getattr(term, "load_state_dict", None))
+        }
+
     def get_checkpoint_state(self) -> dict[str, Any]:
         """Persist state that changes the WBT training distribution."""
 
         state: dict[str, Any] = {
-            "average_episode_tracker": self._get_average_episode_tracker().state_dict(),
+            self.AVERAGE_EPISODE_TRACKER_TERM: self._get_average_episode_tracker().state_dict(),
         }
+        curriculum_terms = self._stateful_curriculum_terms()
+        if curriculum_terms:
+            state["curriculum_terms"] = {name: term.state_dict() for name, term in curriculum_terms.items()}
         motion_command = self.command_manager.get_state("motion_command")
         if (
             motion_command is not None
@@ -227,13 +253,45 @@ class WholeBodyTrackingManager(BaseTask):
         if not state:
             return
 
-        tracker_state = state.get("average_episode_tracker")
+        tracker_state = state.get(self.AVERAGE_EPISODE_TRACKER_TERM)
         if tracker_state is not None:
             tracker = self._get_average_episode_tracker()
             tracker.load_state_dict(tracker_state)
             # The full reset at PPO learn() entry is infrastructure, not a real
             # episode end, and must not immediately overwrite the restored EMA.
             tracker.suppress_next_update()
+
+        live_terms = self._stateful_curriculum_terms()
+        saved_terms = state.get("curriculum_terms")
+        if saved_terms is None:
+            if live_terms:
+                # Checkpoints written before curriculum progress was persisted: the terms restarted at their initial
+                # values (the logged penalty_scale shows the step, the reward totals do not). Say so.
+                logger.warning(
+                    "checkpoint env_state has no 'curriculum_terms' (written before curriculum progress was "
+                    "checkpointed); these curriculum terms restart at their initial values: {}",
+                    sorted(live_terms),
+                )
+        else:
+            if not isinstance(saved_terms, Mapping):
+                raise TypeError("checkpoint curriculum_terms must be a mapping of term name -> state")
+            missing = sorted(set(saved_terms) - set(live_terms))
+            if missing:
+                raise ValueError(
+                    "checkpoint carries curriculum state for terms the live task does not run: "
+                    f"{missing} (live stateful terms: {sorted(live_terms)})"
+                )
+            unsaved = sorted(set(live_terms) - set(saved_terms))
+            if unsaved:
+                logger.warning(
+                    "checkpoint curriculum_terms carries no state for these live curriculum terms; they restart at "
+                    "their initial values: {}",
+                    unsaved,
+                )
+            # Runs after the curriculum manager's setup(), so terms that re-derive values from their setup state
+            # (e.g. scaled reward weights from the original weights) have what they need.
+            for name, term_state in saved_terms.items():
+                live_terms[name].load_state_dict(term_state)
 
         sampler_state = state.get("adaptive_timesteps_sampler")
         if sampler_state is not None:

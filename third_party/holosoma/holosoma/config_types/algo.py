@@ -240,6 +240,10 @@ class PPODualConfig(PPOConfig):
     """History layout of the exported ONNX inputs: ``frame_major_hero_v1`` (HERO sim2real contract,
     permutation applied inside the graph) or ``term_major_holosoma_v1`` (holosoma's native layout, identity)."""
 
+    hero_std_clamp_max: float | None = None
+    """Upper clamp of both actors' exploration std (``None`` = unclamped, the paper recipe). The std is projected
+    under the bound after every update and when a checkpoint is loaded; ``scripts/train.py --std-clamp-max`` sets it."""
+
 
 @dataclass(frozen=True)
 class FastSACConfig:

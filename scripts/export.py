@@ -31,6 +31,35 @@ def validate_bundle(onnx_path: Path) -> tuple[Path, Path]:
     return onnx_path, sidecar
 
 
+def export_config(raw: dict, motion_dir: Path, output: Path):
+    """``(saved, eval_cfg)`` for exporting the checkpoint ``raw``: the saved training configuration made loadable for an
+    inference-only environment, and the single-env evaluation config built from it.
+
+    Export never depends on the checkpoint's training-distribution state: the robot assets come from this checkout,
+    the sampler settings from the current preset and ``reset_sampler_on_resume`` is set
+    (``with_inference_motion_config``), so a checkpoint written under earlier sampler settings, or exported against
+    a different ``--motion-dir`` than it was trained on, builds its environment and loads without the resume-only
+    errors ``scripts/train.py`` guards with ``--reset-sampler-on-resume``. Raises ``ValueError`` when the checkpoint
+    was not trained with a HERO configuration or its observation layout does not match that configuration."""
+    from holosoma.config_types.experiment import ExperimentConfig
+    from holosoma.config_types.logger import DisabledLoggerConfig
+    from hero_isaacsim.config_values.command import with_inference_motion_config
+    from configs import DEFAULTS
+    from hero_isaacsim.config_values.experiment import validate_checkpoint_contract
+    saved = ExperimentConfig(**raw["experiment_config"])
+    if saved.training.name not in DEFAULTS:
+        raise ValueError("Export requires a checkpoint trained with a HERO configuration.")
+    current = DEFAULTS[saved.training.name]
+    validate_checkpoint_contract(raw, current)
+    # Resolve robot assets from this checkout, never from an old saved absolute path.
+    saved = replace(saved, robot=current.robot,
+                    command=with_inference_motion_config(saved.command, current.command, motion_dir=str(motion_dir)),
+                    logger=DisabledLoggerConfig(base_dir=str(output / "eval_logs")))
+    cfg = saved.get_eval_config()
+    cfg = replace(cfg, training=replace(cfg.training, headless=True, num_envs=1, export_onnx=True, max_eval_steps=1))
+    return saved, cfg
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--checkpoint", required=True, type=Path)
@@ -43,28 +72,14 @@ def main(argv=None) -> int:
     output = args.output.expanduser().resolve()
     if not checkpoint.is_file() or not motion_dir.is_dir():
         p.error("--checkpoint must be a file and --motion-dir must be a directory")
-    from holosoma.config_types.experiment import ExperimentConfig
-    from holosoma.config_types.logger import DisabledLoggerConfig
     from hero_isaacsim.agents.ppo_dual.export import hero_sidecar_path
-    from hero_isaacsim.config_values.command import with_motion_config
-    from configs import DEFAULTS
-    from hero_isaacsim.config_values.experiment import validate_checkpoint_contract, observation_contract
+    from hero_isaacsim.config_values.experiment import observation_contract
     import torch
     raw = torch.load(checkpoint, map_location="cpu", weights_only=False)
-    saved = ExperimentConfig(**raw["experiment_config"])
-    if saved.training.name not in DEFAULTS:
-        p.error("Export requires a checkpoint trained with a HERO configuration.")
-    current = DEFAULTS[saved.training.name]
     try:
-        validate_checkpoint_contract(raw, current)
+        saved, cfg = export_config(raw, motion_dir, output)
     except ValueError as exc:
         p.error(str(exc))
-    # Resolve robot assets from this checkout, never from an old saved absolute path.
-    saved = replace(saved, robot=current.robot,
-                    command=with_motion_config(saved.command, motion_dir=str(motion_dir)),
-                    logger=DisabledLoggerConfig(base_dir=str(output / "eval_logs")))
-    cfg = saved.get_eval_config()
-    cfg = replace(cfg, training=replace(cfg.training, headless=True, num_envs=1, export_onnx=True, max_eval_steps=1))
     target = output / (checkpoint.stem + ".onnx")
     if args.dry_run:
         print(json.dumps({"checkpoint": str(checkpoint), "output": str(output), "onnx": str(target),

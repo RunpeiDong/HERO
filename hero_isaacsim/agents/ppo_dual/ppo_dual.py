@@ -60,7 +60,7 @@ HERO_EXPAND_KEY = "hero_expand"
 HERO_EXPAND_SUMMARY_KEYS: tuple[str, ...] = ("from", "from_path", "sha256", "exp", "src_exp", "iter", "new_terms", "timestamp", "lineage", "kind", "removed_terms")
 
 STD_CLAMP_MAX_CONFIG_FIELD = "hero_std_clamp_max"
-"""Optional algo-config attribute for the upper std clamp (``PPODualConfig`` itself has no such field -- vendored)."""
+"""``PPODualConfig`` field holding the upper std clamp (``None`` = unclamped); ``scripts/train.py --std-clamp-max`` sets it."""
 STD_CLAMP_MAX_ENV_VAR = "HERO_PPO_DUAL_STD_CLAMP_MAX"
 """Env-var override of the upper std clamp (float, e.g. ``0.8``; empty / unset = not set)."""
 HERO_KNOB_NAMES: tuple[str, ...] = ("std_clamp_max",)
@@ -681,14 +681,22 @@ class PPODual(PPO):
         loaded = torch.load(ckpt_path, map_location=self.device)
         self.load_model_state(loaded)
         stored_clamp = loaded.get("std_clamp_max")
-        if isinstance(stored_clamp, (int, float)) and self.std_clamp_max is not None and abs(float(stored_clamp) - self.std_clamp_max) > 1e-9:
-
-            # class with a tighter one (PPODualAnchorPin: 0.5) -- the stored value is informational; project_std_() below re-clamps
-            # the loaded raw std in place, so the run starts at the new bound instead of refusing the file.
-            logger.info(
-                "PPODual: checkpoint std_clamp_max={} differs from this run's {} ({}); the loaded std is re-projected under the new clamp",
-                stored_clamp, self.std_clamp_max, self.hero_knob_sources.get("std_clamp_max"),
-            )
+        if isinstance(stored_clamp, (int, float)) and not isinstance(stored_clamp, bool):
+            if self.std_clamp_max is None:
+                # The clamp is not inherited from the checkpoint: a run that drops it continues unclamped (the resume
+                # pre-flight reports the change as algo.config.hero_std_clamp_max; this is the in-process trace).
+                logger.info(
+                    "PPODual: checkpoint std_clamp_max={} but this run has no clamp ({}); the exploration std is unclamped from "
+                    "here on (re-pass --std-clamp-max to keep the bound)",
+                    stored_clamp, self.hero_knob_sources.get("std_clamp_max"),
+                )
+            elif abs(float(stored_clamp) - self.std_clamp_max) > 1e-9:
+                # The stored value is informational; project_std_() below re-clamps the loaded raw std in place, so the run
+                # starts at the new bound instead of refusing the file.
+                logger.info(
+                    "PPODual: checkpoint std_clamp_max={} differs from this run's {} ({}); the loaded std is re-projected under the new clamp",
+                    stored_clamp, self.std_clamp_max, self.hero_knob_sources.get("std_clamp_max"),
+                )
         stored_lower = loaded.get("std_clamp_max_lower")
         if (stored_lower if isinstance(stored_lower, (int, float)) else None) != self.std_clamp_max_lower and (
             self.std_clamp_max_lower is not None or isinstance(stored_lower, (int, float))

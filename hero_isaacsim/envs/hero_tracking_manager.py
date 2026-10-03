@@ -6,7 +6,6 @@ perturbations remain visible as drift. Runtime quaternions use xyzw."""
 from __future__ import annotations
 
 import copy
-import dataclasses
 import math
 import os
 from typing import Any, Sequence
@@ -307,39 +306,9 @@ class HeroTrackingManager(WholeBodyTrackingManager):
     TASK_NAME = "hero_tracking"
     PROVENANCE_LOG_DIR_ENV = "HERO_LOG_DIR"
 
-    def __init__(self, tyro_config, *, device):
-        super().__init__(self._with_feasible_sampler_cap(tyro_config), device=device)
-
-    # ------------------------------------------------------------------------------------------
-    # config fix-ups applied before the managers are built
-    # ------------------------------------------------------------------------------------------
-    @staticmethod
-    def _with_feasible_sampler_cap(tyro_config):
-        """Lift ``adaptive_sampler_clip_max_probability`` to ``1 / num_clips`` when the corpus is too small for it."""
-        from hero_isaacsim.config_values.sampler import with_feasible_sampler_cap  # noqa: PLC0415
-
-        if not dataclasses.is_dataclass(tyro_config):
-            return tyro_config
-        try:
-            command = tyro_config.command
-            term = command.setup_terms["motion_command"]
-            mcfg = term.params["motion_config"]
-        except (AttributeError, KeyError, TypeError):
-            return tyro_config
-        fixed = with_feasible_sampler_cap(mcfg)
-        if fixed is mcfg:
-            return tyro_config
-        get = (lambda c, k: c.get(k)) if isinstance(mcfg, dict) else getattr
-        logger.warning(
-            "HeroTrackingManager: adaptive_sampler_clip_max_probability {} is infeasible for the corpus in {} -> {} "
-            "(= 1 / num_clips)",
-            get(mcfg, "adaptive_sampler_clip_max_probability"),
-            get(mcfg, "motion_dir"),
-            get(fixed, "adaptive_sampler_clip_max_probability"),
-        )
-        params = {**term.params, "motion_config": fixed}
-        setup_terms = {**command.setup_terms, "motion_command": dataclasses.replace(term, params=params)}
-        return dataclasses.replace(tyro_config, command=dataclasses.replace(command, setup_terms=setup_terms))
+    # The motion configuration is taken as given: ``HeroMotionConfig`` refuses the backend's absolute clip cap in
+    # per-clip mode at construction (the HERO sampler bounds clips relative to their prior share), so no corpus-size
+    # fix-up of the cap is needed or performed here.
 
     # ------------------------------------------------------------------------------------------
     # naming / body indices
@@ -659,18 +628,102 @@ class HeroTrackingManager(WholeBodyTrackingManager):
         return None
 
 
+    H_CURRICULUM_STATE_KEY = "hero_h_curriculum_scale"
+    """Checkpoint key of the motion command's per-environment height-offset curriculum scale."""
+
+    def _motion_command(self) -> Any:
+        try:
+            return self.command_manager.get_state("motion_command")
+        except Exception:  # noqa: BLE001
+            return None
+
+    def reset_all(self):
+        """The forced all-env reset (agent construction, ``learn()`` entry) is not an episode end for the height-offset
+        curriculum either: flag the motion command so its next ``_update_h_curriculum`` leaves the per-env scale alone
+        (the WBT base already suppresses the episode-length tracker and the sampler table for the same reset)."""
+        motion_command = self._motion_command()
+        if motion_command is not None and hasattr(motion_command, "_skip_h_curriculum_update_once"):
+            motion_command._skip_h_curriculum_update_once = True
+        return super().reset_all()
+
+    def get_checkpoint_state(self) -> dict[str, Any]:
+        """The WBT state (episode-length tracker, curriculum terms, sampler table) plus the height-offset curriculum."""
+        state = dict(super().get_checkpoint_state())
+        scale = getattr(self._motion_command(), "h_curriculum_scale", None)
+        if isinstance(scale, torch.Tensor):
+            state[self.H_CURRICULUM_STATE_KEY] = scale.detach().cpu().clone()
+        return state
+
+    def _reset_sampler_on_resume(self) -> bool:
+        cfg = getattr(self._motion_command(), "motion_cfg", None)
+        return bool(getattr(cfg, "reset_sampler_on_resume", False))
+
+    def _restore_h_curriculum_scale(self, saved: Any) -> None:
+        """Copy the saved per-env scale into the live buffer; a changed environment count gets the saved mean everywhere."""
+        live = getattr(self._motion_command(), "h_curriculum_scale", None)
+        if not isinstance(live, torch.Tensor):
+            raise ValueError(
+                f"checkpoint carries {self.H_CURRICULUM_STATE_KEY} but the live motion command has no height-offset curriculum"
+            )
+        saved = torch.as_tensor(saved, dtype=live.dtype).reshape(-1)
+        if saved.numel() == 0 or not bool(torch.isfinite(saved).all()):
+            raise ValueError(f"checkpoint {self.H_CURRICULUM_STATE_KEY} must be a non-empty finite vector")
+        if saved.numel() != live.numel():
+            mean = float(saved.mean().item())
+            logger.warning(
+                "{}: checkpoint has {} environments, this run {} -> every environment starts at the saved mean {:.4f}",
+                self.H_CURRICULUM_STATE_KEY, saved.numel(), live.numel(), mean,
+            )
+            saved = torch.full((live.numel(),), mean, dtype=live.dtype)
+        # Defensive: the in-place copy works whether or not the buffer was created under inference mode (an ordinary
+        # tensor accepts it inside the region too; an inference tensor only inside it).
+        with torch.inference_mode():
+            live.copy_(saved.to(device=live.device))
+
     def load_checkpoint_state(self, state: dict[str, Any] | None) -> None:
-        """Restore environment state, restarting an incompatible adaptive sampler."""
+        """Restore environment state; an adaptive sampler table the live sampler cannot load is an error.
+
+        A table written under another sampling rule, with other settings or for another clip registry would be
+        restarted from zeros, i.e. the run would silently continue on a different training distribution. Only
+        ``reset_sampler_on_resume`` (``scripts/train.py --reset-sampler-on-resume``) permits that, with a warning."""
         if not state:
             return
-        state = dict(state)
+        state = dict(state)  # non-empty: a resume (the warning below keys off that, not off what survives the sampler pop)
         sampler_state = state.get("adaptive_timesteps_sampler")
         if sampler_state is not None:
             problem = self._adaptive_sampler_state_problem(sampler_state)
             if problem is not None:
-                logger.warning("Restarting the adaptive sampler: {}", problem)
+                if not self._reset_sampler_on_resume():
+                    raise ValueError(
+                        "the checkpoint's adaptive sampler state cannot be restored by the live configuration -- "
+                        f"{problem}. Resuming would silently train on a different clip distribution; pass "
+                        "--reset-sampler-on-resume to scripts/train.py to restart the failure table from zeros instead."
+                    )
+                logger.warning("Restarting the adaptive sampler from zeros (reset_sampler_on_resume): {}", problem)
                 state.pop("adaptive_timesteps_sampler")
+        h_scale = state.pop(self.H_CURRICULUM_STATE_KEY, None)
         super().load_checkpoint_state(state)
+        if h_scale is not None:
+            self._restore_h_curriculum_scale(h_scale)
+        else:
+            self._warn_h_curriculum_restart()
+
+    def _warn_h_curriculum_restart(self) -> None:
+        """A checkpoint written before the height-offset curriculum was persisted carries the tracker / sampler table but
+        no per-environment scale: every environment restarts at ``h_curriculum_init``. Say so (the pre-flight in
+        ``scripts/train.py`` reports the same finding before Isaac Sim starts)."""
+        motion_command = self._motion_command()
+        live = getattr(motion_command, "h_curriculum_scale", None)
+        if not isinstance(live, torch.Tensor):
+            return
+        cfg = getattr(motion_command, "hero_cfg", None) or getattr(motion_command, "motion_cfg", None)
+        init = getattr(cfg, "h_curriculum_init", None)
+        init = float(init) if isinstance(init, (int, float)) else float(live.float().mean().item())
+        logger.warning(
+            "checkpoint env_state has no '{}' (written before the height-offset curriculum was checkpointed); the "
+            "per-environment height-offset curriculum restarts at h_curriculum_init={:g}",
+            self.H_CURRICULUM_STATE_KEY, init,
+        )
 
     def _command_provenance_block(self) -> tuple[dict[str, Any], str | None]:
         """``(HeroMotionCommand.provenance copy, its first manifest path)`` -- ``({}, None)`` for the stock command or
