@@ -39,10 +39,10 @@ Models and benchmark data: [Hugging Face collection](https://huggingface.co/coll
 Select an object and click **Pick & place**. Physics and inference run locally in desktop Chrome or Edge. The bundled example ONNX model uses delta anchor to further improve end-effector tracking.
 
 <p align="center">
-  <img src="assets/media/tabletop-demo.gif" alt="Accelerated browser demo: select UIUC I, pick it up, place it in the tray, and return home." width="960">
+  <img src="assets/media/tabletop-demo.gif" alt="G1 in a cowboy hat places UIUC I in the tray, then picks up a left-side Cheez-It box from a 50 cm round table and places it in the tray; both scenes end with the arms retracted." width="960">
 </p>
 
-<p align="center"><em>15-second loop · Bundled example model · UIUC I → tray → return</em></p>
+<p align="center"><em>30-second loop · UIUC I → tray → return · Left-side Cheez-It (50 cm round table) → tray → return</em></p>
 
 [Install and build the demo](#demo-and-data-tools), then open `build/demo/Tabletop_Lab.html`. See [checkpoint compatibility](checkpoints/README.md) for other policies.
 
