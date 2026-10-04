@@ -35,12 +35,16 @@ CURRENT_POLICY = expected_sampling_policy(uniform_ratio=0.3, clip_cap_relative=1
 H_KEY = HeroTrackingManager.H_CURRICULUM_STATE_KEY
 H_CURRICULUM_RESTART = "the per-environment height-offset curriculum would restart at h_curriculum_init=0.1"
 PENALTY_RESTART = "would restart at their initial values (penalty_curriculum: initial_scale 0.1)"
-PRE_FIX_CONFIG_CHANGES = [
+PRE_FIX_MOTION_CHANGES = [
     "command.motion_command.motion_config.adaptive_sampler_clip_max_probability: 0.001 -> 1.0",
     "command.motion_command.motion_config.adaptive_sampler_clip_max_relative: null -> 10.0",
     'command.motion_command.motion_config.clip_end_policy_by_source: {"amass": "rollover", "reach_example": "hold"} -> '
     '{"amass": "rollover", "ik_reach_example": "hold"}',
 ]
+PRE_FIX_CLAMP_CHANGE = "algo.config.hero_std_clamp_max: null -> 0.5"
+"""A pre-fix checkpoint predates the exploration-std clamp (no field = unclamped); the dual-actor presets now clamp at 0.5 by
+default, so resuming it is this finding too -- unless the run passes ``--std-clamp-max none`` (see the launcher tests)."""
+PRE_FIX_CONFIG_CHANGES = [*PRE_FIX_MOTION_CHANGES, PRE_FIX_CLAMP_CHANGE]
 
 
 def load_script(name):
@@ -70,8 +74,10 @@ def motion_config(serialized):
 
 def pre_fix_saved_config(cfg):
     """The saved configuration of a legacy-style checkpoint: absolute clip cap 0.001, no relative cap, no resume
-    opt-in field, the old IK tag in the clip-end policies, another corpus path and source mix."""
+    opt-in field, the old IK tag in the clip-end policies, another corpus path and source mix, no exploration-std clamp
+    field (the dual-actor knob did not exist; the single-actor config never has it)."""
     saved = saved_config(cfg)
+    saved["algo"]["config"].pop("hero_std_clamp_max", None)
     mc = motion_config(saved)
     mc["adaptive_sampler_clip_max_probability"] = 0.001
     mc.pop("adaptive_sampler_clip_max_relative")
@@ -486,9 +492,13 @@ def test_the_real_pre_fix_checkpoint_is_refused_once_with_both_flags_named(tmp_p
     assert err.rstrip().endswith("Pass --allow-config-change and --reset-sampler-on-resume to continue.")
     assert train.main([*base, "--allow-config-change", "--reset-sampler-on-resume"]) == 0
     report = json.loads(capsys.readouterr().out)
-    assert report["config_changes"] == PRE_FIX_CONFIG_CHANGES
+    assert report["config_changes"] == PRE_FIX_CONFIG_CHANGES and report["std_clamp_max"] == 0.5
     assert PENALTY_RESTART in report["curriculum_state_reset"] and H_CURRICULUM_RESTART in report["curriculum_state_reset"]
     assert "clip_cap_relative" in report["sampler_reset"] and "29548 clips" in report["sampler_reset"]
+    # the checkpoint predates the clamp: staying unclamped (--std-clamp-max none) removes that finding and only that one
+    assert train.main([*base, "--std-clamp-max", "none", "--allow-config-change", "--reset-sampler-on-resume"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["config_changes"] == PRE_FIX_MOTION_CHANGES and report["std_clamp_max"] is None
 
 
 def test_random_episode_length_offsets_apply_to_fresh_starts_only():
@@ -523,49 +533,109 @@ def test_random_episode_length_offsets_apply_to_fresh_starts_only():
 
 def test_std_clamp_max_flag_reaches_the_dual_actor_knob(tmp_path, monkeypatch, capsys):
     from hero_isaacsim.agents.ppo_dual.ppo_dual import PPODual, STD_CLAMP_MAX_CONFIG_FIELD
+    from hero_isaacsim.config_values.experiment import HERO_STD_CLAMP_MAX
 
     monkeypatch.delenv("HERO_PPO_DUAL_STD_CLAMP_MAX", raising=False)
     train = load_script("train")
     corpus = make_corpus(tmp_path / "corpus")
     parse = lambda *extra: train.parser().parse_args(["--motion-dir", str(corpus), *extra])
-    clamped = train.build_config(parse("--std-clamp-max", "0.5"))
     default = train.build_config(parse())
+    clamped = train.build_config(parse("--std-clamp-max", "0.8"))
+    unclamped = train.build_config(parse("--std-clamp-max", "none"))
     assert STD_CLAMP_MAX_CONFIG_FIELD == "hero_std_clamp_max"
-    assert clamped.algo.config.hero_std_clamp_max == 0.5 and default.algo.config.hero_std_clamp_max is None
+    # the clamp is ON by default (0.5, the preset's value); a float overrides it, "none" lifts it
+    assert HERO_STD_CLAMP_MAX == 0.5 and default.algo.config.hero_std_clamp_max == 0.5
+    assert clamped.algo.config.hero_std_clamp_max == 0.8 and unclamped.algo.config.hero_std_clamp_max is None
+    assert train.build_config(parse("--std-clamp-max", "0.5")).algo.config == default.algo.config
+    for name in ("with_delta_anchor", "without_delta_ee"):
+        assert train.build_config(parse("--config", name)).algo.config.hero_std_clamp_max == 0.5, name
+    assert parse().std_clamp_max is train.KEEP_PRESET_STD_CLAMP and repr(train.KEEP_PRESET_STD_CLAMP) == "preset"
 
     def resolve(config):
         algo = PPODual.__new__(PPODual)
         algo.config, algo._std_clamp_max_override, algo.hero_knob_sources = config, None, {}
         return algo._resolve_std_clamp_max(), algo.hero_knob_sources["std_clamp_max"]
 
-    assert resolve(clamped.algo.config) == (0.5, "config.hero_std_clamp_max")
-    assert resolve(default.algo.config) == (None, "class.PPODual")  # the paper recipe: no clamp
-    with pytest.raises(ValueError, match="dual-actor"):
-        train.build_config(parse("--config", "without_delta_anchor_single", "--std-clamp-max", "0.5"))
-    with pytest.raises(ValueError, match="positive"):
-        train.build_config(parse("--std-clamp-max", "-0.1"))
+    assert resolve(default.algo.config) == (0.5, "config.hero_std_clamp_max")
+    assert resolve(clamped.algo.config) == (0.8, "config.hero_std_clamp_max")
+    assert resolve(unclamped.algo.config) == (None, "class.PPODual")  # the paper-faithful recipe: no clamp
+    # the single-actor PPO has no clamp: the flag is refused whatever its value, and the plain preset has no such field
+    for value in ("0.5", "none"):
+        with pytest.raises(ValueError, match="dual-actor"):
+            train.build_config(parse("--config", "without_delta_anchor_single", "--std-clamp-max", value))
+    assert not hasattr(train.build_config(parse("--config", "without_delta_anchor_single")).algo.config, "hero_std_clamp_max")
     # the clamp is compared on resume: adding, removing or changing it is a finding (it is not inherited from the checkpoint)
     assert RESUME_ALGO_CONFIG_FIELDS == (STD_CLAMP_MAX_CONFIG_FIELD,)
-    assert resume_config_changes(saved_config(default), clamped) == ["algo.config.hero_std_clamp_max: null -> 0.5"]
-    assert resume_config_changes(saved_config(clamped), default) == ["algo.config.hero_std_clamp_max: 0.5 -> null"]
-    assert resume_config_changes(saved_config(clamped), clamped) == [] and resume_config_changes(saved_config(default), default) == []
+    assert resume_config_changes(saved_config(unclamped), default) == ["algo.config.hero_std_clamp_max: null -> 0.5"]
+    assert resume_config_changes(saved_config(default), unclamped) == ["algo.config.hero_std_clamp_max: 0.5 -> null"]
+    assert resume_config_changes(saved_config(default), clamped) == ["algo.config.hero_std_clamp_max: 0.5 -> 0.8"]
+    for cfg in (default, clamped, unclamped):
+        assert resume_config_changes(saved_config(cfg), cfg) == []
     before_the_field = saved_config(default)
     before_the_field["algo"]["config"].pop("hero_std_clamp_max")  # a checkpoint written before the knob existed: no clamp
-    assert resume_config_changes(before_the_field, default) == []
-    assert resume_config_changes(before_the_field, clamped) == ["algo.config.hero_std_clamp_max: null -> 0.5"]
-    unclamped = tmp_path / "unclamped.pt"
-    torch.save({"experiment_config": saved_config(default), "iter": 10}, unclamped)
+    assert resume_config_changes(before_the_field, unclamped) == []
+    assert resume_config_changes(before_the_field, default) == ["algo.config.hero_std_clamp_max: null -> 0.5"]
+    assert resume_config_changes(before_the_field, clamped) == ["algo.config.hero_std_clamp_max: null -> 0.8"]
+    # an unclamped checkpoint vs the new default: refused once, continued with --allow-config-change or kept unclamped with none
+    ck_unclamped = tmp_path / "unclamped.pt"
+    torch.save({"experiment_config": saved_config(unclamped), "iter": 10}, ck_unclamped)
+    resume = ["--motion-dir", str(corpus), "--checkpoint", str(ck_unclamped), "--dry-run"]
     with pytest.raises(SystemExit):
-        train.main(["--motion-dir", str(corpus), "--checkpoint", str(unclamped), "--std-clamp-max", "0.5", "--dry-run"])
+        train.main(resume)
     err = capsys.readouterr().err
     assert "algo.config.hero_std_clamp_max: null -> 0.5" in err and err.rstrip().endswith("Pass --allow-config-change to continue.")
-    assert train.main(["--motion-dir", str(corpus), "--checkpoint", str(unclamped), "--std-clamp-max", "0.5", "--dry-run", "--allow-config-change"]) == 0
-    assert json.loads(capsys.readouterr().out)["config_changes"] == ["algo.config.hero_std_clamp_max: null -> 0.5"]
-    assert train.main(["--motion-dir", str(corpus), "--std-clamp-max", "0.5", "--dry-run"]) == 0
-    assert json.loads(capsys.readouterr().out)["std_clamp_max"] == 0.5
+    assert train.main([*resume, "--allow-config-change"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["config_changes"] == ["algo.config.hero_std_clamp_max: null -> 0.5"] and report["std_clamp_max"] == 0.5
+    assert train.main([*resume, "--std-clamp-max", "none"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["config_changes"] == [] and report["std_clamp_max"] is None
+    # the reverse: a checkpoint of the default (clamped) recipe resumed unclamped
+    ck_default = tmp_path / "default.pt"
+    torch.save({"experiment_config": saved_config(default), "iter": 10}, ck_default)
+    assert train.main(["--motion-dir", str(corpus), "--checkpoint", str(ck_default), "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["config_changes"] == []
+    with pytest.raises(SystemExit):
+        train.main(["--motion-dir", str(corpus), "--checkpoint", str(ck_default), "--std-clamp-max", "none", "--dry-run"])
+    assert "algo.config.hero_std_clamp_max: 0.5 -> null" in capsys.readouterr().err
     readme = (ROOT / "configs/README.md").read_text()
     assert "--std-clamp-max" in readme and "--allow-config-change" in readme and "--reset-sampler-on-resume" in readme
-    assert "hero_std_clamp_max" in readme and "not inherited" in readme
+    assert "hero_std_clamp_max" in readme and "not inherited" in readme and "--std-clamp-max none" in readme and "0.5 by default" in readme
+    assert "--std-clamp-max none" in (ROOT / "checkpoints/README.md").read_text()
+
+
+def test_std_clamp_max_none_lifts_the_clamp_and_the_dry_run_reports_the_effective_value(tmp_path, capsys):
+    """``--std-clamp-max none`` / ``off`` (any case) -> ``None``; the default dry run shows 0.5; bad values are argparse errors;
+    the help names the default, the disable word and the resume rule."""
+    train = load_script("train")
+    corpus = make_corpus(tmp_path / "corpus")
+    for word in ("none", "None", "NONE", "off", "OFF", " off "):
+        assert train.std_clamp_max_arg(word) is None, word
+        assert train.parser().parse_args(["--motion-dir", str(corpus), "--std-clamp-max", word]).std_clamp_max is None, word
+    assert train.std_clamp_max_arg("0.5") == 0.5 and train.std_clamp_max_arg("1") == 1.0
+    assert train.STD_CLAMP_DISABLE_WORDS == ("none", "off")
+    for bad in ("bogus", "-0.1", "0", "nan", "inf", "preset", ""):
+        with pytest.raises(SystemExit):
+            train.parser().parse_args(["--motion-dir", str(corpus), "--std-clamp-max", bad])
+        assert "--std-clamp-max" in capsys.readouterr().err, bad
+    # build_config re-checks a value handed in without the parser (programmatic callers)
+    args = train.parser().parse_args(["--motion-dir", str(corpus)])
+    args.std_clamp_max = -0.1
+    with pytest.raises(ValueError, match="positive"):
+        train.build_config(args)
+    assert train.main(["--motion-dir", str(corpus), "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["std_clamp_max"] == 0.5
+    assert train.main(["--motion-dir", str(corpus), "--std-clamp-max", "none", "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["std_clamp_max"] is None
+    assert train.main(["--motion-dir", str(corpus), "--std-clamp-max", "0.8", "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["std_clamp_max"] == 0.8
+    assert train.main(["--config", "without_delta_anchor_single", "--motion-dir", str(corpus), "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["std_clamp_max"] is None  # no clamp exists on the single-actor PPO
+    help_text = train.parser().format_help()
+    start = help_text.rindex("--std-clamp-max FLOAT|none")  # the option entry, not the usage header
+    option = help_text[start:help_text.index("--output", start)]
+    for phrase in ("0.5", "'none'", "paper-faithful", "--allow-config-change", "--dry-run", "single-actor"):
+        assert phrase in option, phrase
 
 
 def test_ppo_dual_load_logs_a_removed_or_changed_std_clamp(tmp_path):

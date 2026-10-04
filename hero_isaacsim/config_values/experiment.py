@@ -2,7 +2,9 @@
 
 All presets share the paper's action, reward, randomization and training settings and come in a dual-actor
 (paper) and a single-actor flavour. Delta anchor adds the h20/h21/h22 observations; ``without_delta_ee`` removes the
-residual end-effector feedback (h07/h08) from the actor and keeps everything else, including the critic."""
+residual end-effector feedback (h07/h08) from the actor and keeps everything else, including the critic. The dual-actor
+presets bound the exploration std at :data:`HERO_STD_CLAMP_MAX` by default (``scripts/train.py --std-clamp-max`` overrides it,
+``--std-clamp-max none`` lifts it); the single-actor presets use the stock PPO actor, which has no clamp."""
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -29,6 +31,14 @@ WITHOUT_DELTA_EE = "without_delta_ee"
 DELTA_EE_TERMS = observation.DELTA_EE_TERM_NAMES
 SAVE_INTERVAL = 500
 NUM_LEARNING_ITERATIONS = 20000
+HERO_STD_CLAMP_MAX: float = 0.5
+"""Default upper clamp of the dual-actor exploration std (``PPODualConfig.hero_std_clamp_max``; the lower-body / upper-body
+actors start at 0.8 / 0.6 and are projected under the bound after every update and on load). The unclamped recipe lets the
+exploration std grow to ~1.3 over training, and adjacent checkpoints then differ on the benchmark while the training reward looks
+flat; with the clamp the deterministic policy holds its benchmark numbers from one checkpoint to the next. ``None`` is the
+unclamped, paper-faithful recipe (``scripts/train.py --std-clamp-max none``)."""
+PPO_DUAL_ONLY_KWARGS: tuple[str, ...] = ("init_noise_std_upper", "hero_std_clamp_max")
+"""Entries of :data:`HERO_PPO_KWARGS` that exist on ``PPODualConfig`` only; the single-actor ``PPOConfig`` drops them."""
 HERO_PPO_KWARGS: dict[str, Any] = dict(
     num_learning_epochs=5,
     num_mini_batches=4,
@@ -54,6 +64,7 @@ HERO_PPO_KWARGS: dict[str, Any] = dict(
     load_optimizer=True,
     init_noise_std=0.8,  # lower body; upper body 0.6 (init_noise_std_upper on PPODualConfig)
     init_noise_std_upper=0.6,
+    hero_std_clamp_max=HERO_STD_CLAMP_MAX,  # dual-actor only (PPODualConfig); the single-actor PPO has no clamp
     num_learning_iterations=NUM_LEARNING_ITERATIONS,
     init_at_random_ep_len=True,
     empirical_normalization=False,
@@ -80,8 +91,9 @@ def make_hero_recipe(*, delta_anchor: bool = False, delta_ee: bool = True, actor
     """Build a serializable HERO configuration with local logging by default.
 
     ``actor="dual"`` is the paper's two-actor PPO (lower-body and upper-body heads, 15 + 14 actions, their own
-    critics); ``actor="single"`` trains one whole-body actor and one critic with holosoma's stock PPO on the same
-    observations, rewards, action contract and randomization. Both export the same frame-major ONNX layout.
+    critics, exploration std bounded at :data:`HERO_STD_CLAMP_MAX`); ``actor="single"`` trains one whole-body actor and one
+    critic with holosoma's stock PPO (no std clamp) on the same observations, rewards, action contract and randomization. Both
+    export the same frame-major ONNX layout.
     ``delta_ee=False`` is the ablation without the residual end-effector feedback: the actor loses ``h07``/``h08``
     (675 -> 585 inputs), the critic and every other setting stay those of ``without_delta_anchor``; it has no
     delta-anchor flavour (that combination has no preset name, so it is rejected)."""
@@ -104,7 +116,7 @@ def make_hero_recipe(*, delta_anchor: bool = False, delta_ee: bool = True, actor
         scene=replace(simulator.isaacsim.config.scene, env_spacing=3.0),
         sim=replace(simulator.isaacsim.config.sim, fps=500, control_decimation=10, max_episode_length_s=10.0)))
     if actor == ACTOR_SINGLE:
-        single_kwargs = {k: v for k, v in HERO_PPO_KWARGS.items() if k != "init_noise_std_upper"}
+        single_kwargs = {k: v for k, v in HERO_PPO_KWARGS.items() if k not in PPO_DUAL_ONLY_KWARGS}
         algo = PPOAlgoConfig(_target_=PPO_SINGLE_TARGET, _recursive_=False,
             config=PPOConfig(module_dict=PPOModuleDictConfig(
                 actor=_module(29, observation.ACTOR_GROUP), critic=_module(1, observation.CRITIC_GROUP)), **single_kwargs))
@@ -199,7 +211,9 @@ settings. Everything else in the motion config is compared, in particular the sa
 RESUME_ALGO_CONFIG_FIELDS: tuple[str, ...] = ("hero_std_clamp_max",)
 """Algorithm-config fields :func:`resume_config_changes` compares (``algo.config.<field>``): the exploration-std clamp
 (``scripts/train.py --std-clamp-max``) changes which trajectories the policy samples from the checkpoint on, so adding,
-removing or changing it on resume is a finding. A checkpoint written before the field existed reads as ``null`` (no clamp)."""
+removing or changing it on resume is a finding. The live value is the preset default :data:`HERO_STD_CLAMP_MAX` or the flag,
+never the checkpoint's. A checkpoint written before the field existed reads as ``null`` (no clamp), so against the default it
+is the finding ``algo.config.hero_std_clamp_max: null -> 0.5`` unless the run passes ``--std-clamp-max none``."""
 
 
 def resume_config_changes(saved: Mapping[str, Any], config: ExperimentConfig) -> list[str]:

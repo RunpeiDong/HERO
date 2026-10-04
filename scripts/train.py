@@ -12,6 +12,34 @@ from typing import NamedTuple
 
 from _bootstrap import ROOT
 
+STD_CLAMP_DISABLE_WORDS: tuple[str, ...] = ("none", "off")
+"""``--std-clamp-max`` values that lift the clamp (case-insensitive): the unclamped, paper-faithful recipe."""
+
+
+class _PresetStdClamp:
+    """Sentinel default of ``--std-clamp-max``: the flag was not given, the preset's own ``hero_std_clamp_max`` (0.5 on the
+    dual-actor configurations) stays in force. Distinct from ``None``, which means "clamp lifted". Not a string, so argparse
+    does not pass it through the option's ``type``."""
+
+    def __repr__(self) -> str:
+        return "preset"
+
+
+KEEP_PRESET_STD_CLAMP = _PresetStdClamp()
+
+
+def std_clamp_max_arg(text: str) -> float | None:
+    """argparse type of ``--std-clamp-max``: a positive finite float, or one of :data:`STD_CLAMP_DISABLE_WORDS` -> ``None``."""
+    if text.strip().lower() in STD_CLAMP_DISABLE_WORDS:
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive float or one of {'/'.join(STD_CLAMP_DISABLE_WORDS)}, got {text!r}") from None
+    if not (math.isfinite(value) and value > 0.0):
+        raise argparse.ArgumentTypeError(f"--std-clamp-max must be a positive float (or {'/'.join(STD_CLAMP_DISABLE_WORDS)}), got {text!r}")
+    return value
+
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
@@ -32,9 +60,14 @@ def parser() -> argparse.ArgumentParser:
                         "be restored: another sampling rule or sampler settings, or a table built for another source mix "
                         "(CORPUS_MANIFEST.json source_weights), clip count or set of source tags than this corpus. Without this "
                         "flag that is an error. A changed source mix is legitimate; it only forces the table to restart")
-    p.add_argument("--std-clamp-max", type=float, default=None, metavar="FLOAT",
-                   help="Upper clamp of the exploration std of both actor heads (dual-actor configs); default: none, the paper "
-                        "recipe. See configs/README.md")
+    p.add_argument("--std-clamp-max", type=std_clamp_max_arg, default=KEEP_PRESET_STD_CLAMP, metavar="FLOAT|none",
+                   help="Upper clamp of the exploration std of both actor heads (dual-actor configs only; the single-actor PPO has "
+                        "no clamp and rejects the flag). Default: the preset's 0.5. Without the clamp the exploration std grows to "
+                        "about 1.3 over training and adjacent checkpoints then differ on the benchmark; 'none' (or 'off') lifts the "
+                        "clamp for the paper-faithful recipe. The effective value is saved as algo.config.hero_std_clamp_max and "
+                        "printed by --dry-run (std_clamp_max). It is not inherited on resume: the pre-flight compares it with the "
+                        "checkpoint's saved value, so a checkpoint trained without the clamp resumes with a finding unless you "
+                        "pass --std-clamp-max none (or --allow-config-change). See configs/README.md")
     p.add_argument("--output", type=Path, default=ROOT / "runs")
     p.add_argument("--num-envs", type=int, default=4096)
     p.add_argument("--iterations", type=int, default=20000, help="Learning iterations to run; when resuming, they follow the checkpoint's iteration")
@@ -68,10 +101,12 @@ def build_config_and_census(args):
     for name in ("num_envs", "iterations", "save_interval"):
         if getattr(args, name) <= 0:
             raise ValueError(f"--{name.replace('_', '-')} must be positive")
-    std_clamp_max = getattr(args, "std_clamp_max", None)
-    if std_clamp_max is not None:
-        if not (math.isfinite(std_clamp_max) and std_clamp_max > 0.0):
-            raise ValueError("--std-clamp-max must be a positive float")
+    # KEEP_PRESET_STD_CLAMP: the flag was not given -> the preset's hero_std_clamp_max (0.5 on the dual-actor configurations)
+    # stands; None (``--std-clamp-max none``) lifts the clamp; a float replaces it.
+    std_clamp_max = getattr(args, "std_clamp_max", KEEP_PRESET_STD_CLAMP)
+    if std_clamp_max is not KEEP_PRESET_STD_CLAMP:
+        if std_clamp_max is not None and not (isinstance(std_clamp_max, (int, float)) and math.isfinite(std_clamp_max) and std_clamp_max > 0.0):
+            raise ValueError("--std-clamp-max must be a positive float or none")
         if args.config in SINGLE_ACTOR_CONFIGS:
             raise ValueError("--std-clamp-max applies to the dual-actor configurations only; the single-actor PPO has no exploration-std clamp")
     motion_dir = args.motion_dir.expanduser().resolve()
@@ -119,8 +154,8 @@ def build_config_and_census(args):
     # The manifest's clip-end policies overlay the preset defaults (mocap rolls over, generated reaching clips hold).
     clip_end_policies = {**get_motion_config(cfg.command).clip_end_policy_by_source, **manifest_clip_end_policies(manifest)}
     algo_overrides = dict(num_learning_iterations=args.iterations, save_interval=args.save_interval)
-    if std_clamp_max is not None:
-        algo_overrides["hero_std_clamp_max"] = float(std_clamp_max)
+    if std_clamp_max is not KEEP_PRESET_STD_CLAMP:
+        algo_overrides["hero_std_clamp_max"] = None if std_clamp_max is None else float(std_clamp_max)
     cfg = replace(cfg,
         training=replace(cfg.training, num_envs=args.num_envs, seed=args.seed, checkpoint=checkpoint),
         command=with_motion_config(cfg.command, motion_dir=str(motion_dir), source_weights=weights,

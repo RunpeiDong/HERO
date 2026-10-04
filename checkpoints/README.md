@@ -14,7 +14,7 @@ The example model uses delta anchor and a five-frame, 1,000-dimensional actor in
 
 Dual-actor exports have two ONNX inputs (`actor_obs_lower_body`, `actor_obs_upper_body`) that are fed the same vector; `_single` exports have one `actor_obs` input. The metadata lists the inputs.
 
-The example model is for inference. To resume training, use a `.pt` checkpoint matching your configuration.
+The example model is for inference. To resume training, use a `.pt` checkpoint matching your configuration. The dual-actor configurations clamp the exploration std at 0.5 by default; a `.pt` checkpoint trained without the clamp (the paper-faithful recipe, or one written before the setting existed) resumes with a pre-flight finding on `algo.config.hero_std_clamp_max` unless you pass the same setting (`--std-clamp-max none`) or `--allow-config-change`. See [Exploration std clamp](../configs/README.md#exploration-std-clamp).
 
 Export your checkpoint with `scripts/export.py` in the Isaac Lab environment. It writes the ONNX model and matching `_hero.json` metadata. See [training configurations](../configs/README.md).
 

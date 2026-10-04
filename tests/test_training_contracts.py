@@ -1,5 +1,5 @@
 """CPU checks of HERO training and export contracts."""
-from dataclasses import asdict, replace
+from dataclasses import asdict, fields, replace
 import importlib.util
 import json
 from pathlib import Path
@@ -12,9 +12,11 @@ import torch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "third_party/holosoma"), str(ROOT / "scripts")]
 from configs import DEFAULTS
-from hero_isaacsim.config_values.experiment import DELTA_ANCHOR_TERMS, DELTA_EE_TERMS, observation_contract, validate_checkpoint_contract
+from hero_isaacsim.config_values.experiment import (DELTA_ANCHOR_TERMS, DELTA_EE_TERMS, HERO_STD_CLAMP_MAX, PPO_DUAL_ONLY_KWARGS,
+                                                    observation_contract, validate_checkpoint_contract)
 from hero_isaacsim.agents.ppo_dual.modules import PPODualActor
 from holosoma.agents.modules.ppo_modules import PPOActor
+from holosoma.config_types.algo import PPOConfig, PPODualConfig
 
 DUAL = ("without_delta_anchor", "with_delta_anchor", "without_delta_ee")
 SINGLE = ("without_delta_anchor_single", "with_delta_anchor_single", "without_delta_ee_single")
@@ -147,6 +149,7 @@ def test_launcher_defaults_are_local_amass_and_paper_recipe(tmp_path):
     assert cfg.training.name == "without_delta_anchor"
     assert cfg.logger.type == "disabled"
     assert cfg.training.checkpoint is None
+    assert cfg.algo.config.hero_std_clamp_max == HERO_STD_CLAMP_MAX == 0.5  # the exploration-std clamp is on by default
     assert cfg.command.setup_terms["motion_command"].params["motion_config"].source_weights == {"amass": 1.0}
     assert script.main(["--motion-dir", str(tmp_path), "--dry-run"]) == 0
 
@@ -244,6 +247,15 @@ def test_single_actor_presets_share_everything_but_the_algorithm():
         assert single.algo.config.init_noise_std == base.algo.config.init_noise_std == 0.8
         assert single.algo.config.export_motion_in_onnx is False
         assert observation_contract(single) == observation_contract(base)
+        # the algorithm differs by the actor family only: every stock PPO setting but the module dict is identical, and the
+        # PPODualConfig-only fields (upper-body init std, action split, export layout, the exploration-std clamp) have no
+        # single-actor counterpart -- the stock PPOActor has no clamp, so the 0.5 default lives on the dual recipes alone
+        for field in fields(PPOConfig):
+            if field.name != "module_dict":
+                assert getattr(single.algo.config, field.name) == getattr(base.algo.config, field.name), field.name
+        dual_only = {f.name for f in fields(PPODualConfig)} - {f.name for f in fields(PPOConfig)}
+        assert dual_only == set(PPO_DUAL_ONLY_KWARGS) | {"action_split", "history_layout_export"}
+        assert base.algo.config.hero_std_clamp_max == HERO_STD_CLAMP_MAX == 0.5 and not hasattr(single.algo.config, "hero_std_clamp_max")
     with pytest.raises(ValueError, match="dual|single"):
         from hero_isaacsim.config_values.experiment import make_hero_recipe
         make_hero_recipe(actor="triple")
