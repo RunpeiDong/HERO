@@ -10,7 +10,7 @@
   <a href="https://illinois.edu/">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/media/uiuc-logo-dark.svg">
-      <img src="assets/media/uiuc-logo.svg" alt="University of Illinois Urbana-Champaign" width="145">
+      <img src="assets/media/uiuc-logo.svg" alt="University of Illinois Urbana-Champaign" width="164">
     </picture>
   </a>
 </p>
@@ -189,6 +189,16 @@ python scripts/hero_bench.py fetch --url https://huggingface.co/datasets/RunpeiD
 python scripts/hero_bench.py run --corpus data/hero_bench_v1 --onnx-dir checkpoints/example --sidecar checkpoints/example/model_hero.json --out results/example --tiers core
 python scripts/hero_bench.py report --corpus data/hero_bench_v1 --results results/example --card
 ```
+
+Reference results for the bundled `checkpoints/example` model (delta anchor, five-frame 1,000-dimensional actor input, 44,000 iterations) on `hero_bench_v1` (protocol hash `139ea1d62b8ab1d1`, MuJoCo, Dex3 hands, `--odom so`, `--tiers all`; fail-free 100 % in every cell). Errors are the reaching hand's world-frame palm error: open-loop hold and `hold3` average the clip's hold window, `final-1 s` the last second before the padded clip end.
+
+| tier | open-loop hold (cm) | closed-loop hold3 (cm) | closed-loop final-1 s (cm) | S7.5 | C3 |
+|---|---|---|---|---|---|
+| core (420) | 5.5 | 5.2 | 3.2 | 82.4 % | 52.6 % |
+| extended (618) | 5.3 | 4.5 | 3.2 | 86.2 % | 60.4 % |
+| stress (260) | 7.0 | 6.8 | 5.4 | 68.5 % | 35.8 % |
+
+S7.5 = open-loop hold mean <= 7.5 cm and <= 15 deg; C3 = closed-loop final second <= 3 cm and <= 15 deg (Wilson 95 % intervals are in the results cards). Thresholds, the stop rule, and the odometry mode and seed rule are part of the corpus manifest.
 
 See [benchmark protocols and corpus setup](docs/benchmark.md).
 

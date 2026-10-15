@@ -326,3 +326,22 @@ def test_report_failure_does_not_aggregate_existing_markdown(tmp_path, monkeypat
     monkeypatch.setattr(cli, "report", lambda _: 1)
     assert bench.main(["report", "--corpus", str(corpus), "--results", str(out)]) == 1
     assert not (out / "RESULTS.md").exists()
+
+
+def test_run_fails_up_front_when_the_closed_loop_ik_dependency_is_missing(tmp_path, monkeypatch, capsys):
+    """A missing bench extra used to surface as one ``ModuleNotFoundError: mink`` per clip inside the workers (2026-10-07, every
+    closed-loop clip failed on a train-only install); the run now refuses before rolling anything and names the fix."""
+    bench = load_hero_bench()
+    corpus = make_corpus(tmp_path)
+    policy_args = make_policy(tmp_path)
+    assert bench._missing_closed_loop_dependencies(("json", "os")) == []
+    assert bench._missing_closed_loop_dependencies(("hero_bench_surely_missing_module",)) == ["hero_bench_surely_missing_module"]
+    import sim2sim.bench.cli as cli
+    monkeypatch.setattr(cli, "run", lambda argv: (_ for _ in ()).throw(AssertionError("no clip may be rolled")))
+    monkeypatch.setattr(bench, "_missing_closed_loop_dependencies", lambda modules=bench.CLOSED_LOOP_MODULES: ["mink"])
+    with pytest.raises(SystemExit) as exc:
+        bench.main(["run", "--corpus", str(corpus), *policy_args, "--out", str(tmp_path / "results"), "--tiers", "core"])
+    assert "mink" in str(exc.value) and ".[bench]" in str(exc.value) and "--loops open" in str(exc.value)
+    # --loops open does not need the IK dependency
+    monkeypatch.setattr(cli, "run", lambda argv: 0)
+    assert bench.main(["run", "--corpus", str(corpus), *policy_args, "--out", str(tmp_path / "results_open"), "--tiers", "core", "--loops", "open"]) in (0, 1)

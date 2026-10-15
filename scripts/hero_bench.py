@@ -136,6 +136,18 @@ def _tier_manifest(corpus: Path, tier: str) -> Path:
     return m
 
 
+#: Python modules the closed-loop replan protocol imports lazily inside every worker (``sim2sim.bench.replan``: the benchmark mink IK).
+#: Checked once up front so a missing bench extra fails before any clip is rolled instead of as one ``ModuleNotFoundError`` per clip.
+CLOSED_LOOP_MODULES: tuple[str, ...] = ("mink", "daqp")
+
+
+def _missing_closed_loop_dependencies(modules: tuple[str, ...] = CLOSED_LOOP_MODULES) -> list[str]:
+    """Names of :data:`CLOSED_LOOP_MODULES` that cannot be imported (``importlib.util.find_spec``; empty = all present)."""
+    import importlib.util
+
+    return [name for name in modules if importlib.util.find_spec(name) is None]
+
+
 def closed_loop_horizon_s(manifest_path: Path, floor_s: float = OPEN_LOOP_HORIZON_S) -> float:
     """Protocol rule: ``max(14 s, ceil(longest clip + 6 s))`` so slow / long-hold layers are not truncated."""
     rows = json.loads(manifest_path.read_text()).get("clips", [])
@@ -216,6 +228,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     loops = [x.strip() for x in args.loops.split(",") if x.strip()]
     if not loops or any(x not in ("open", "closed") for x in loops):
         raise SystemExit("hero_bench run: --loops takes open, closed or open,closed")
+    if "closed" in loops:
+        missing = _missing_closed_loop_dependencies()
+        if missing:
+            raise SystemExit("hero_bench run: the closed-loop replan protocol needs the benchmark IK dependencies "
+                             f"{', '.join(missing)} -- install the bench extra: pip install -e '.[bench]' (or pass --loops open)")
     extra = shlex.split(args.extra) if args.extra else []
     managed = ("--onnx-dir", "--sidecar", "--motion-dir", "--out", "--horizon-s", "--bench-manifest", "--jobs", "--fail-causes", "--odom", "--odom-seed",
                "--pad-s", "--replan", "--replan-first", "--replan-period-s", "--replan-base", "--goal-adjust", "--replan-blend-s")

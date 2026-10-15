@@ -244,6 +244,7 @@ def build_report(open_summary: Mapping[str, Any] | None, open_label: str | None,
     meta = series_meta(open_summary, open_label, closed_summary, closed_label)
     pol = meta.get("policy") or {}
     odom = meta.get("odometry") or {}
+    plant = meta.get("plant") or {}
     return {
         "schema": SCHEMA,
         "open_loop": ({"path": open_path, "label": open_label, "n_clips": og_all.get("all", {}).get("n_clips")} if og_all else None),
@@ -256,6 +257,8 @@ def build_report(open_summary: Mapping[str, Any] | None, open_label: str | None,
         "strata_run": {"open_loop": sorted({k[len("stratum:"):] for k in og_all if k.startswith("stratum:")}), "closed_loop": sorted({k[len("stratum:"):] for k in cg_all if k.startswith("stratum:")})},
         "policy": {"tag": pol.get("tag") or meta.get("tag"), "onnx": pol.get("onnx"), "onnx_bytes": pol.get("onnx_bytes"), "iteration": pol.get("iteration"), "preset": pol.get("preset"),
                    "odom_source": pol.get("odom_source") or odom.get("source"), "odom_seed": (odom.get("config") or {}).get("seed", (pol.get("odom_noise") or {}).get("seed"))},
+        "plant": {"urdf": plant.get("urdf"), "model_path": plant.get("model_path"), "plant_kind": plant.get("plant_kind") or meta.get("plant_kind"),
+                  "foot_collision": plant.get("foot_collision")},
         "termination": termination_block(meta),
         "notes": sorted({n for r in rows for n in r["notes"]}),
         "columns": [c for c, _ in COLUMNS] + ([REST_COL] if rest_col else []),
@@ -331,12 +334,16 @@ def _notes_lines(report: Mapping[str, Any]) -> list[str]:
 def render_card(report: Mapping[str, Any], *, plant_sha: str | None, policy_sha: str | None, title: str) -> tuple[str, dict[str, Any]]:
     """The results-card skeleton: provenance header + tier / layer tables; NO external reference rows."""
     mf, pol = report["manifest"], report["policy"]
+    plant = report.get("plant") or {}
+    if plant_sha is None and plant.get("urdf") and Path(str(plant["urdf"])).is_file():
+        plant_sha = sha256_file(plant["urdf"])  # the series meta names the URDF the runner loaded; hash it when it is on this machine
     card = {
         "schema": "hero_bench_results_card_v1",
         "title": title,
         "protocol_hash": mf.get("protocol_hash"),
         "manifest_sha256": mf.get("sha256"),
-        "plant_sha256": plant_sha or "<plant URDF sha256: TODO>",
+        "plant_sha256": plant_sha or "<plant URDF sha256: TODO (pass --plant-sha; the series meta names " + str(Path(str(plant.get("urdf") or "unknown")).name) + ")>",
+        "plant": {k: plant.get(k) for k in ("urdf", "model_path", "plant_kind", "foot_collision")},
         "policy_sha256": policy_sha or "<policy ONNX sha256: TODO>",
         "policy": {k: pol.get(k) for k in ("tag", "iteration", "preset", "onnx_bytes")},
         "odometry": {"source": pol.get("odom_source"), "seed": pol.get("odom_seed")},
@@ -352,6 +359,7 @@ def render_card(report: Mapping[str, Any], *, plant_sha: str | None, policy_sha:
          f"| protocol hash | `{card['protocol_hash'] or 'n/a (no manifest given)'}` |",
          f"| manifest sha256 | `{card['manifest_sha256'] or 'n/a'}` |",
          f"| plant (URDF) sha256 | `{card['plant_sha256']}` |",
+         f"| plant | `{Path(str(plant.get('urdf') or 'unknown')).name}` kind `{plant.get('plant_kind')}` feet `{plant.get('foot_collision')}` |",
          f"| policy (ONNX) sha256 | `{card['policy_sha256']}` |",
          f"| policy | `{pol.get('tag')}` iter {pol.get('iteration')} preset `{pol.get('preset')}` |",
          f"| odometry | `{pol.get('odom_source')}` seed {pol.get('odom_seed')} |",

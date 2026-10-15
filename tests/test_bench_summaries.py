@@ -608,3 +608,32 @@ def test_regression_closed_loop_numbers_match_the_stored_summary(tmp_path):
     g = new["results"][label]["groups"]
     assert new["results"][label]["heights"] == ["h050", "h074", "h088"] and "tier:core" in g and "stratum:h050" in g and "cell:h088/h088/right" in g
     assert g["all"]["success"]["levels"]["C3"]["n"] == g["all"]["n_clips"] and g["all"]["success"]["stayed_frac"] == pytest.approx(g["all"]["replan"]["stayed_frac"])
+
+
+def test_card_fills_the_plant_sha_from_the_series_meta_and_names_the_urdf(tmp_path):
+    """The runner records the URDF it loaded (``meta["plant"]["urdf"]``); the card hashes that file when it is readable (2026-10-08: public
+    cards printed ``<plant URDF sha256: TODO>`` because nobody passed --plant-sha), names the file either way, and --plant-sha still wins."""
+    import hashlib
+    olp, clp, mp = _report_inputs(tmp_path)
+    urdf = tmp_path / "g1_29dof_dex3fixed_hero.urdf"
+    urdf.write_text("<robot name='g1'/>\n")
+    ol = json.loads(olp.read_text())
+    sim_label = next(iter(ol["sims"]))  # the open-loop summary keeps the series meta under sims[<label>]["meta"]
+    ol["sims"][sim_label].setdefault("meta", {})["plant"] = {"urdf": str(urdf), "model_path": str(tmp_path / "g1.xml"), "plant_kind": "dex3_urdf", "foot_collision": "sonic_box"}
+    olp.write_text(json.dumps(ol, default=str))
+    assert RP.main(["--open-loop", str(olp), "--closed-loop", str(clp), "--manifest", str(mp), "--out", str(tmp_path / "rep_plant"), "--card"]) == 0
+    card = json.loads((tmp_path / "rep_plant" / "results_card.json").read_text())
+    md = (tmp_path / "rep_plant" / "RESULTS_CARD.md").read_text()
+    assert card["plant_sha256"] == hashlib.sha256(urdf.read_bytes()).hexdigest() and card["plant"]["plant_kind"] == "dex3_urdf"
+    assert "| plant | `g1_29dof_dex3fixed_hero.urdf` kind `dex3_urdf` feet `sonic_box` |" in md
+    rep = json.loads((tmp_path / "rep_plant" / "hero_bench_report.json").read_text())
+    assert rep["plant"]["urdf"] == str(urdf) and rep["plant"]["foot_collision"] == "sonic_box"
+    # an explicit --plant-sha wins over the recorded file
+    assert RP.main(["--open-loop", str(olp), "--closed-loop", str(clp), "--manifest", str(mp), "--out", str(tmp_path / "rep_plant2"), "--card", "--plant-sha", "ab" * 32]) == 0
+    assert json.loads((tmp_path / "rep_plant2" / "results_card.json").read_text())["plant_sha256"] == "ab" * 32
+    # a URDF that is not on this machine: placeholder that still names the file
+    ol["sims"][sim_label]["meta"]["plant"]["urdf"] = "/nonexistent/robots/g1_29dof_paddle3box_hero.urdf"
+    olp.write_text(json.dumps(ol, default=str))
+    assert RP.main(["--open-loop", str(olp), "--closed-loop", str(clp), "--manifest", str(mp), "--out", str(tmp_path / "rep_plant3"), "--card"]) == 0
+    card3 = json.loads((tmp_path / "rep_plant3" / "results_card.json").read_text())
+    assert card3["plant_sha256"].startswith("<plant URDF sha256: TODO") and "g1_29dof_paddle3box_hero.urdf" in card3["plant_sha256"]

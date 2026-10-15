@@ -34,8 +34,8 @@
     "source": "https://hero-humanoid.github.io/static/images/uiuc_logo.svg",
     "brand_reference": "https://brand.illinois.edu/visual-identity/wordmarks",
     "source_sha256": "fc9f0d96949c7f7d7c3e896e21e9c0e9fcc56713014de6f56b06014dfa209a2b",
-    "description": "Existing Illinois horizontal wordmark. Original paths and colors retained with a transparent background; no border or added padding.",
-    "sha256": "e14c235a86a709795eee0c0f6f4dacc5e88eb4d9192da7da4871bd71982ba1c8"
+    "description": "Existing Illinois horizontal wordmark. Original paths and colors retained on a white (#ffffff) rounded backing plate with 16/11-unit padding and no border, so the navy text stays legible when a light-scheme viewer shows it on a dark page (prefers-color-scheme follows the viewer's system setting, not the page background).",
+    "sha256": "5dd00dc06c69fdac8be30747904df287c7410fd07633229dfb06cad9650113dc"
   },
   "link-project.svg": {
     "source": "Original vector artwork for this repository.",
@@ -66,8 +66,8 @@
     "source": "https://hero-humanoid.github.io/static/images/uiuc_logo.svg",
     "brand_reference": "https://brand.illinois.edu/visual-identity/wordmarks",
     "source_sha256": "fc9f0d96949c7f7d7c3e896e21e9c0e9fcc56713014de6f56b06014dfa209a2b",
-    "description": "Dark-theme version of the Illinois wordmark: original paths retained, navy changed to white, orange retained, transparent background without a border.",
-    "sha256": "c11e81294d5167af2864b9c0baa97ca4dad6822dbdf77b67c540edd50772213f"
+    "description": "Dark-theme version of the Illinois wordmark: original paths retained, navy changed to white, orange retained, on a #0d1117 (GitHub dark background) rounded backing plate with 16/11-unit padding and no border, so the white text stays legible when a dark-scheme viewer shows it on a light page.",
+    "sha256": "cb27804fe4784be6ae2a72a44ef0a7dbf3ca5e1a62d6b8ed13fc56e5b0363900"
   },
   "link-huggingface.svg": {
     "source": "Original vector artwork for this repository.",
